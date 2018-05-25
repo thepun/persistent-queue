@@ -6,15 +6,15 @@ public final class PersistentQueueHead {
 
     }
 
-    public Object get() {
+    public int get(Object[] batch) {
 
     }
 
-    public Object getOrWait() {
+    public int getOrWait(Object[] batch) {
 
     }
 
-    public void commit() {
+    public void commit(int count) {
 
     }
 
