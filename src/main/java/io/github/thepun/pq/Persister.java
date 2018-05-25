@@ -8,19 +8,17 @@ import java.nio.file.StandardOpenOption;
 
 final class Persister implements Runnable {
 
-    private final WriteBuffer buffer;
     private final FileChannel file;
-    private final MappedByteBuffer[] mappedMemory;
-    private final PersistentQueueTail<?, ?>[] tails;
+    private final WriteBuffer buffer;
+    private final QueueToPersister.Head[] inputs;
 
-    private boolean active;
+    private boolean stopped;
 
     Persister(Configuration configuration, PersistentQueueTail<?, ?>[] tails) {
-        this.tails = tails;
+        inputs = null;
 
-        active = true;
+        stopped = false;
         buffer = new WriteBuffer();
-        mappedMemory = new MappedByteBuffer[16];
 
         try {
             file = FileChannel.open(FileSystems.getDefault().getPath(configuration.getDataPath()), StandardOpenOption.READ, StandardOpenOption.WRITE);
@@ -31,16 +29,50 @@ final class Persister implements Runnable {
 
     @Override
     public void run() {
-        for (;;) {
-
+        try {
+            process();
+        } catch (Throwable e) {
+            close();
+            throw e;
         }
     }
 
     void deactivate() {
-        active = false;
+        stopped = false;
     }
 
-    private void fulfillMappedMemmory() {
+    private void process() {
+        int batchSize = 0;
+        Object[] batch = new Object[16];
+
+        int inputIndex = 0;
+        QueueToPersister.Head[] inputsVar = inputs;
+
+        int mappedMemoryIndex = 0;
+        MappedByteBuffer[] mappedMemory = new MappedByteBuffer[16];
+        fulfillMappedMemmory(mappedMemory);
+
+        for (; ; ) {
+            if (stopped) {
+                return;
+            }
+
+            QueueToPersister.Head input = inputsVar[inputIndex++];
+
+
+        }
+    }
+
+    private void fulfillMappedMemmory(MappedByteBuffer[] mappedMemory) {
 
     }
+
+    private void close() {
+        try {
+            file.close();
+        } catch (IOException e) {
+            // just ignore
+        }
+    }
+
 }
