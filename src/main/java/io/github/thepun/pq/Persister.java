@@ -1,78 +1,201 @@
 package io.github.thepun.pq;
 
-import java.io.IOException;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.FileSystems;
-import java.nio.file.StandardOpenOption;
+import java.util.concurrent.CountDownLatch;
 
 final class Persister implements Runnable {
 
-    private final FileChannel file;
-    private final WriteBuffer buffer;
-    private final QueueToPersister.Head[] inputs;
+    private final boolean sync;
+    private final boolean flat;
+    private final int sizeOfInputBatch;
+    private final int sizeOfOutputBatch;
+    private final CountDownLatch finished;
+    private final PersisterWriteBuffer fileBuffer;
+    private final QueueToPersister.Head[] queuesToPersister;
+    private final QueueFromPersister.Tail[] queuesFromPersister;
+    private final Serializer<Object, Object>[] serializersHastable;
+    private final PersistCallback<Object, Object> persistCallback;
 
     private boolean stopped;
+    private boolean started;
 
-    Persister(Configuration configuration, PersistentQueueTail<?, ?>[] tails) {
-        inputs = null;
+    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Serializer<Object, Object>[] serializers, Configuration<Object, Object> configuration) {
+        queuesToPersister = inputs;
+        queuesFromPersister = outputs;
 
+        started = false;
         stopped = false;
-        buffer = new WriteBuffer();
+        finished = new CountDownLatch(1);
+        fileBuffer = new PersisterWriteBuffer(configuration.getDataPath());
+        
+        sync = configuration.isSync();
+        serializersHastable = serializers;
+        sizeOfInputBatch = configuration.getInputBatchSize();
+        sizeOfOutputBatch = configuration.getOutputBatchSize();
+        persistCallback = configuration.getPersistCallback();
 
-        try {
-            file = FileChannel.open(FileSystems.getDefault().getPath(configuration.getDataPath()), StandardOpenOption.READ, StandardOpenOption.WRITE);
-        } catch (IOException e) {
-            throw new PersistenceException("Failed to open data file: " + configuration.getDataPath(), e);
-        }
+        // special simplified case when batch sizes are equal and only one input and only one output
+        flat = inputs.length == 1 && outputs.length == 1 && sizeOfInputBatch == sizeOfOutputBatch;
     }
 
     @Override
     public void run() {
+        synchronized (this) {
+            // run only once
+            if (started || stopped) {
+                return;
+            }
+
+            started = true;
+        }
+
         try {
-            process();
-        } catch (Throwable e) {
-            close();
-            throw e;
+            if (flat) {
+                processOneToOne();
+            } else {
+                processManyToMany();
+            }
+        } finally {
+            fileBuffer.close();
+            finished.countDown();
         }
     }
 
     void deactivate() {
-        stopped = false;
-    }
-
-    private void process() {
-        int batchSize = 0;
-        Object[] batch = new Object[16];
-
-        int inputIndex = 0;
-        QueueToPersister.Head[] inputsVar = inputs;
-
-        int mappedMemoryIndex = 0;
-        MappedByteBuffer[] mappedMemory = new MappedByteBuffer[16];
-        fulfillMappedMemmory(mappedMemory);
-
-        for (; ; ) {
+        synchronized (this) {
             if (stopped) {
                 return;
             }
 
-            QueueToPersister.Head input = inputsVar[inputIndex++];
+            stopped = true;
 
-
+            if (!started) {
+                fileBuffer.close();
+                return;
+            }
         }
-    }
 
-    private void fulfillMappedMemmory(MappedByteBuffer[] mappedMemory) {
-
-    }
-
-    private void close() {
+        // wait for executor to finish task
         try {
-            file.close();
-        } catch (IOException e) {
-            // just ignore
+            finished.await();
+        } catch (InterruptedException e) {
+            // just skip
         }
     }
 
+    private void processOneToOne() {
+        // TODO: implement one to one persister
+        processManyToMany();
+    }
+
+    private void processManyToMany() {
+        PersistCallback<Object, Object> callback = persistCallback;
+
+        Serializer<Object, Object>[] serializers = serializersHastable;
+        int serializersSize = serializers.length;
+
+        int batchReady = 0;
+        int inputBatchSize = sizeOfInputBatch;
+        Object[] batch = new Object[inputBatchSize];
+        int batchLeft = inputBatchSize;
+
+        int inputIndex = 0;
+        QueueToPersister.Head[] inputs = queuesToPersister;
+        int inputsSize = inputs.length;
+        int inputIndexMark = inputsSize;
+
+        int outputIndex = 0;
+        int outputBatchSize = sizeOfOutputBatch;
+        QueueFromPersister.Tail[] outputs = queuesFromPersister;
+        int outputsSize = outputs.length;
+
+        boolean syncAfterPersist = sync;
+        boolean notSyncAfterPersist = !syncAfterPersist;
+        boolean batchSizeSame = inputBatchSize == outputBatchSize;
+        PersisterWriteBuffer buffer = fileBuffer;
+
+        for (; ; ) {
+            // cancel everything on deactivation
+            if (stopped) {
+                return;
+            }
+
+            // get several available objects from queue
+            QueueToPersister.Head input = inputs[inputIndex % inputsSize];
+            int count = input.get(batch, batchReady, batchLeft);
+            batchLeft -= count;
+            batchReady += count;
+
+            // if batch is not full 
+            if (batchLeft > 0) {
+                // check we pulled all inputs
+                if (inputIndex == inputIndexMark) {
+                    inputIndexMark = inputIndex + inputsSize;
+                    inputIndex++;
+
+                    // proceed with batch write only if it is not empty
+                    if (batchReady == 0) {
+                        continue;
+                    }
+                } else {
+                    // just roll over input
+                    inputIndex++;
+                    continue;
+                }
+            }
+
+            // persist objects and invoke callback
+            for (int i = 0; i < batchReady; i++) {
+                int index = i << 1;
+                Object element = batch[index];
+                Object elementContext = batch[index | 1];
+                int typeHash = element.getClass().hashCode() % serializersSize;
+                Serializer<Object, Object> serializer = serializers[typeHash];
+                serializer.serialize(buffer, element, elementContext);
+                
+                if (notSyncAfterPersist) {
+                    callback.onElementPersisted(element, elementContext);
+                }
+            }
+
+            // sync IO if needed
+            if (syncAfterPersist) {
+                buffer.sync();
+                
+                // execute callback after sync
+                for (int i = 0; i < batchReady; i++) {
+                    int index = i << 1;
+                    Object element = batch[index];
+                    Object elementContext = batch[index | 1];
+                    callback.onElementPersisted(element, elementContext);
+                }
+            }
+
+            // push persisted objects
+            if (batchSizeSame) {
+                // if input and output batch sizes are equal
+                outputs[outputIndex % outputsSize].add(batch, batchReady, batchLeft);
+                batchReady = 0;
+                outputIndex++;
+            } else {
+                // if output batch size is less then input
+                int outputBatchOffset = 0;
+                for (; ; ) {
+                    if (batchReady > outputBatchSize) {
+                        batchReady -= outputBatchSize;
+                        outputs[outputIndex % outputsSize].add(batch, outputBatchOffset, outputBatchSize);
+                        outputBatchOffset += outputBatchSize;
+                    } else {
+                        outputs[outputIndex % outputsSize].add(batch, outputBatchOffset, batchReady);
+                        batchReady = 0;
+                        break;
+                    }
+
+                    outputIndex++;
+                }
+            }
+
+            // retrigger buffer
+            batchLeft = inputBatchSize;
+        }
+    }
 }

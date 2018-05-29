@@ -1,4 +1,4 @@
 package io.github.thepun.pq;
 
-public final class ReadBuffer {
+public interface ReadBuffer {
 }

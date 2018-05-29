@@ -1,21 +1,9 @@
 package io.github.thepun.pq;
 
-public final class PersistentQueueHead {
+public interface PersistentQueueHead<T> {
 
-    PersistentQueueHead(Configuration configuration) {
+    int get(T[] batch);
 
-    }
-
-    public int get(Object[] batch) {
-
-    }
-
-    public int getOrWait(Object[] batch) {
-
-    }
-
-    public void commit(int count) {
-
-    }
+    int getOrWait(T[] batch);
 
 }
