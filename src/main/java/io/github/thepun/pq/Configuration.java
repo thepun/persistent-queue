@@ -7,10 +7,13 @@ public final class Configuration<T, C> {
     private boolean sync;
     private int headCount;
     private int tailCount;
-    private String dataPath;
+    private int dataFileSize;
+    private int commitFileSize;
+    private int sequenceFileSize;
     private int inputBatchSize;
     private int outputBatchSize;
     private int initialFreeNodes;
+    private String dataPath;
     private PersistCallback<T, C> persistCallback;
     private Map<Class<? extends T>, Serializer<? extends T, ? extends C>> serializers;
 
@@ -84,5 +87,29 @@ public final class Configuration<T, C> {
 
     public void setOutputBatchSize(int outputBatchSize) {
         this.outputBatchSize = outputBatchSize;
+    }
+
+    public int getDataFileSize() {
+        return dataFileSize;
+    }
+
+    public void setDataFileSize(int dataFileSize) {
+        this.dataFileSize = dataFileSize;
+    }
+
+    public int getCommitFileSize() {
+        return commitFileSize;
+    }
+
+    public void setCommitFileSize(int commitFileSize) {
+        this.commitFileSize = commitFileSize;
+    }
+
+    public int getSequenceFileSize() {
+        return sequenceFileSize;
+    }
+
+    public void setSequenceFileSize(int sequenceFileSize) {
+        this.sequenceFileSize = sequenceFileSize;
     }
 }

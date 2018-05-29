@@ -1,5 +1,6 @@
 package io.github.thepun.pq;
 
+import java.nio.MappedByteBuffer;
 import java.util.concurrent.CountDownLatch;
 
 final class Persister implements Runnable {
@@ -9,7 +10,8 @@ final class Persister implements Runnable {
     private final int sizeOfInputBatch;
     private final int sizeOfOutputBatch;
     private final CountDownLatch finished;
-    private final PersisterWriteBuffer fileBuffer;
+    private final FileBufferHelper dataBufferHelper;
+    private final FileBufferHelper sequenceBufferHelper;
     private final QueueToPersister.Head[] queuesToPersister;
     private final QueueFromPersister.Tail[] queuesFromPersister;
     private final Serializer<Object, Object>[] serializersHastable;
@@ -17,6 +19,9 @@ final class Persister implements Runnable {
 
     private boolean stopped;
     private boolean started;
+    private int initialIndex;
+    private int initialDataCursor;
+    private int initialSequnceCursor;
 
     Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Serializer<Object, Object>[] serializers, Configuration<Object, Object> configuration) {
         queuesToPersister = inputs;
@@ -25,8 +30,9 @@ final class Persister implements Runnable {
         started = false;
         stopped = false;
         finished = new CountDownLatch(1);
-        fileBuffer = new PersisterWriteBuffer(configuration.getDataPath());
-        
+        dataBufferHelper = new FileBufferHelper(configuration.getDataPath(), "data", configuration.getDataFileSize());
+        sequenceBufferHelper = new FileBufferHelper(configuration.getDataPath(), "sequence", configuration.getSequenceFileSize());
+
         sync = configuration.isSync();
         serializersHastable = serializers;
         sizeOfInputBatch = configuration.getInputBatchSize();
@@ -49,13 +55,21 @@ final class Persister implements Runnable {
         }
 
         try {
+            // initialize sequence
+            findLastSequence();
+
+            // load all uncommited elements
+            processUncommitted();
+
+            // start reading new data
             if (flat) {
                 processOneToOne();
             } else {
                 processManyToMany();
             }
         } finally {
-            fileBuffer.close();
+            dataBufferHelper.close();
+            sequenceBufferHelper.close();;
             finished.countDown();
         }
     }
@@ -69,7 +83,7 @@ final class Persister implements Runnable {
             stopped = true;
 
             if (!started) {
-                fileBuffer.close();
+                dataBufferHelper.close();
                 return;
             }
         }
@@ -80,6 +94,14 @@ final class Persister implements Runnable {
         } catch (InterruptedException e) {
             // just skip
         }
+    }
+
+    private void findLastSequence() {
+
+    }
+
+    private void processUncommitted() {
+
     }
 
     private void processOneToOne() {
@@ -111,7 +133,8 @@ final class Persister implements Runnable {
         boolean syncAfterPersist = sync;
         boolean notSyncAfterPersist = !syncAfterPersist;
         boolean batchSizeSame = inputBatchSize == outputBatchSize;
-        PersisterWriteBuffer buffer = fileBuffer;
+        MappedByteBuffer dataBuffer = dataBufferHelper.getBuffer();
+        MappedByteBufferWrapper dataBufferWrapper = new MappedByteBufferWrapper(dataBuffer);
 
         for (; ; ) {
             // cancel everything on deactivation
@@ -150,7 +173,7 @@ final class Persister implements Runnable {
                 Object elementContext = batch[index | 1];
                 int typeHash = element.getClass().hashCode() % serializersSize;
                 Serializer<Object, Object> serializer = serializers[typeHash];
-                serializer.serialize(buffer, element, elementContext);
+                serializer.serialize(dataBufferWrapper, element, elementContext);
                 
                 if (notSyncAfterPersist) {
                     callback.onElementPersisted(element, elementContext);
@@ -159,7 +182,7 @@ final class Persister implements Runnable {
 
             // sync IO if needed
             if (syncAfterPersist) {
-                buffer.sync();
+                dataBuffer.force();
                 
                 // execute callback after sync
                 for (int i = 0; i < batchReady; i++) {

@@ -4,6 +4,8 @@ import sun.misc.Contended;
 
 final class QueueFromPersister implements PersistentQueueHead<Object> {
 
+
+
     QueueFromPersister(Configuration<Object, Object> configuration) {
 
     }
