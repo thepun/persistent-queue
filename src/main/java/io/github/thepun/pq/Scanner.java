@@ -18,7 +18,7 @@ final class Scanner {
         FileSystem fileSystem = FileSystems.getDefault();
 
         // check root directory
-        Path rootPath = fileSystem.getPath(dataPath).toAbsolutePath();
+        Path rootPath = fileSystem.getPath(configuration.getDataPath()).toAbsolutePath();
         if (!Files.exists(rootPath)) {
             throw new PersistenceException("Data path not found: " + rootPath);
         }

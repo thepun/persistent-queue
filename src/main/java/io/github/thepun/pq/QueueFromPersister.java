@@ -2,11 +2,10 @@ package io.github.thepun.pq;
 
 import sun.misc.Contended;
 
-import java.nio.MappedByteBuffer;
-
 final class QueueFromPersister implements PersistentQueueHead<Object> {
 
 
+    private final Tail tail;
 
     QueueFromPersister(Configuration<Object, Object> configuration) {
 
@@ -22,6 +21,10 @@ final class QueueFromPersister implements PersistentQueueHead<Object> {
         return 0;
     }
 
+    Tail getTail() {
+        return tail;
+    }
+
 
     @Contended
     static final class Tail {
@@ -30,14 +33,16 @@ final class QueueFromPersister implements PersistentQueueHead<Object> {
         private Commit commit;
 
         void setCommit(Commit commit) {
-
+            this.commit = commit;
         }
 
         void setSequenceId(long sequenceId) {
-
+            this.sequenceId = sequenceId;
         }
 
         void add(Object[] buffer, int offset, int length) {
+            commit.mark(sequenceId);
+
 
         }
     }

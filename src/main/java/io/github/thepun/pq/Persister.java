@@ -9,7 +9,7 @@ final class Persister implements Runnable {
     private final Data data;
     private final Sequence sequence;
     private final Commit[] commits;
-    private final ScanResult initialScan;
+    private final ScanResult scanResult;
     private final CountDownLatch finished;
     private final QueueToPersister.Head[] inputs;
     private final QueueFromPersister.Tail[] outputs;
@@ -21,21 +21,18 @@ final class Persister implements Runnable {
     private boolean stopped;
     private boolean started;
 
-    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Configuration<Object, Object> configuration) throws PersistenceException {
+    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, ScanResult scanResult, Configuration<Object, Object> configuration) throws PersistenceException {
         this.inputs = inputs;
         this.outputs = outputs;
+        this.scanResult = scanResult;
         this.configuration = configuration;
 
+        data = scanResult.getData();
+        sequence = scanResult.getSequence();
+        commits = scanResult.getCommits();
+        finished = new CountDownLatch(1);
         started = false;
         stopped = false;
-        finished = new CountDownLatch(1);
-
-        // scan files and load all
-        Scanner scanner = new Scanner(configuration);
-        initialScan = scanner.scan();
-        data = initialScan.getData();
-        sequence = initialScan.getSequence();
-        commits = initialScan.getCommits();
 
         Map<Class<?>, Marshaller<?, ?>> serializersMap = configuration.getSerializers();
 
@@ -155,7 +152,7 @@ final class Persister implements Runnable {
     private void initializeOutputs() {
         Logger.info("Initializing output queues");
 
-        ScanCommitElement[] scannedCommits = initialScan.getScannedCommits();
+        ScanCommitElement[] scannedCommits = scanResult.getScannedCommits();
         for (int i = 0; i < outputs.length; i++) {
             QueueFromPersister.Tail output = outputs[i];
             output.setCommit(commits[i]);
@@ -163,7 +160,7 @@ final class Persister implements Runnable {
         }
 
         // initialize sequence to latest consistent element
-        sequence.setCursor(initialScan.getMaxAvailableSequnceCursor());
+        sequence.setCursor(scanResult.getMaxAvailableSequnceCursor());
     }
 
     private void loadUncommitted() {
@@ -172,7 +169,7 @@ final class Persister implements Runnable {
         Object[] batch = null;
         DataReader reader = null;
 
-        ScanCommitElement[] scannedCommits = initialScan.getScannedCommits();
+        ScanCommitElement[] scannedCommits = scanResult.getScannedCommits();
         for (int outputIndex = 0; outputIndex < outputs.length; outputIndex++) {
             long initialSequenceCursor = sequence.getCursor();
 
@@ -256,7 +253,7 @@ final class Persister implements Runnable {
         Sequence sequenceVar = sequence;
         DataWriter writer = dataVar.newWriter();
         writer.setCursor(sequenceVar.getNextElementCursor());
-        long sequenceId = initialScan.getMaxAvailableSequnceId() + 1;
+        long sequenceId = scanResult.getMaxAvailableSequnceId() + 1;
 
         Marshaller<Object, Object>[] marshallers = marshallersByClass;
         int serializersSize = marshallers.length;

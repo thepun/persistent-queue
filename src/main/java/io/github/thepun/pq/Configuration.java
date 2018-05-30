@@ -1,6 +1,7 @@
 package io.github.thepun.pq;
 
 import java.util.Map;
+import java.util.concurrent.ThreadFactory;
 
 public final class Configuration<T, C> {
 
@@ -14,6 +15,7 @@ public final class Configuration<T, C> {
     private int outputBatchSize;
     private int initialFreeNodes;
     private String dataPath;
+    private ThreadFactory persisterThreadFactory;
     private PersistCallback<T, C> persistCallback;
     private Map<Class<? extends T>, Marshaller<? extends T, ? extends C>> serializers;
 
@@ -111,5 +113,13 @@ public final class Configuration<T, C> {
 
     public void setSequenceFileSize(int sequenceFileSize) {
         this.sequenceFileSize = sequenceFileSize;
+    }
+
+    public ThreadFactory getPersisterThreadFactory() {
+        return persisterThreadFactory;
+    }
+
+    public void setPersisterThreadFactory(ThreadFactory persisterThreadFactory) {
+        this.persisterThreadFactory = persisterThreadFactory;
     }
 }

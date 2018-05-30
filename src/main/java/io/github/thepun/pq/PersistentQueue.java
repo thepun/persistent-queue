@@ -1,27 +1,36 @@
 package io.github.thepun.pq;
 
-import java.util.Map;
+import java.util.stream.Stream;
 
-@SuppressWarnings("unchecked")
 public final class PersistentQueue<T, C> {
 
-    private final PersistentQueueHead<T>[] heads;
-    private final PersistentQueueTail<T, C>[] tails;
+    private final Persister persister;
+    private final QueueToPersister[] tails;
+    private final QueueFromPersister[] heads;
 
-    private Thread persisterThread;
+    public PersistentQueue(Configuration<T, C> configuration) throws PersistenceException {
+        Configuration<Object, Object> objectConfiguration = (Configuration<Object, Object>) configuration;
 
-    public PersistentQueue(Configuration<T, C> configuration) {
-        PersistentQueueHead<T>[] headsToUse = new PersistentQueueHead[configuration.getHeadCount()];
+        QueueFromPersister[] headsToUse = new QueueFromPersister[configuration.getHeadCount()];
         for (int i = 0; i < headsToUse.length; i++) {
-            headsToUse[i] = (PersistentQueueHead<T>) new QueueFromPersister((Configuration<Object, Object>) configuration);
+            headsToUse[i] = new QueueFromPersister(objectConfiguration);
         }
         heads = headsToUse;
 
-        PersistentQueueTail<T, C>[] tailsToUse = new PersistentQueueTail[configuration.getTailCount()];
+        QueueToPersister[] tailsToUse = new QueueToPersister[configuration.getTailCount()];
         for (int i = 0; i < tailsToUse.length; i++) {
-            tailsToUse[i] = (PersistentQueueTail<T, C>) new QueueToPersister((Configuration<Object, Object>) configuration);
+            tailsToUse[i] = new QueueToPersister(objectConfiguration);
         }
         tails = tailsToUse;
+
+        // scan files
+        Scanner scanner = new Scanner(objectConfiguration);
+        ScanResult scanResult = scanner.scan();
+
+        // persister
+        QueueToPersister.Head[] inputs = Stream.of(heads).map(QueueFromPersister::getTail).toArray(QueueToPersister.Head[]::new);
+        QueueFromPersister.Tail[] outputs = Stream.of(tails).map(QueueToPersister::getHead).toArray(QueueFromPersister.Tail[]::new);
+        persister = new Persister(inputs, outputs, scanResult, objectConfiguration);
     }
 
     public PersistentQueueHead<T> getHead(int index) {
@@ -29,7 +38,7 @@ public final class PersistentQueue<T, C> {
             throw new IllegalArgumentException("Wrong head index");
         }
 
-        return heads[index];
+        return (PersistentQueueHead<T>) heads[index];
     }
 
     public PersistentQueueTail<T, C> getTail(int index) {
@@ -37,16 +46,10 @@ public final class PersistentQueue<T, C> {
             throw new IllegalArgumentException("Wrong tail index");
         }
 
-        return tails[index];
+        return (PersistentQueueTail<T, C>) tails[index];
     }
 
-    public synchronized void start() {
-
+    public void deactivate() {
+        persister.deactivate();
     }
-
-    public synchronized void stop() {
-
-    }
-
-
 }
