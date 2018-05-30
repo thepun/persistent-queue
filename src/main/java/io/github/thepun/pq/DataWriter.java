@@ -2,13 +2,9 @@ package io.github.thepun.pq;
 
 import io.github.thepun.unsafe.chars.OffHeapCharSequence;
 
-import java.io.IOException;
 import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.FileSystems;
-import java.nio.file.StandardOpenOption;
 
-final class MappedByteBufferWrapper implements WriteBuffer {
+final class DataWriter implements WriteBuffer {
 
     private final int size;
     private final MappedByteBuffer buffer;
@@ -16,7 +12,7 @@ final class MappedByteBufferWrapper implements WriteBuffer {
     private int cursor;
     private int sizeMinusEight;
 
-    MappedByteBufferWrapper(MappedByteBuffer buffer) {
+    DataWriter(MappedByteBuffer buffer) {
         this.buffer = buffer;
 
         size = buffer.capacity();
@@ -64,5 +60,9 @@ final class MappedByteBufferWrapper implements WriteBuffer {
 
     long getCursor() {
         return cursor;
+    }
+
+    void sync() {
+
     }
 }

@@ -2,6 +2,8 @@ package io.github.thepun.pq;
 
 import sun.misc.Contended;
 
+import java.nio.MappedByteBuffer;
+
 final class QueueFromPersister implements PersistentQueueHead<Object> {
 
 
@@ -24,9 +26,19 @@ final class QueueFromPersister implements PersistentQueueHead<Object> {
     @Contended
     static final class Tail {
 
-        void add(Object[] buffer, int offset, int length) {
+        private long sequenceId;
+        private Commit commit;
+
+        void setCommit(Commit commit) {
 
         }
 
+        void setSequenceId(long sequenceId) {
+
+        }
+
+        void add(Object[] buffer, int offset, int length) {
+
+        }
     }
 }

@@ -1,46 +1,41 @@
 package io.github.thepun.pq;
 
-import java.nio.MappedByteBuffer;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Stream;
 
 final class Persister implements Runnable {
 
-    private final boolean sync;
-    private final boolean flat;
-    private final int sizeOfInputBatch;
-    private final int sizeOfOutputBatch;
+    private final Data data;
+    private final Sequence sequence;
+    private final Commit[] commits;
+    private final ScanResult initialScan;
     private final CountDownLatch finished;
-    private final FileBufferHelper dataBufferHelper;
-    private final FileBufferHelper sequenceBufferHelper;
-    private final QueueToPersister.Head[] queuesToPersister;
-    private final QueueFromPersister.Tail[] queuesFromPersister;
-    private final Serializer<Object, Object>[] serializersHastable;
-    private final PersistCallback<Object, Object> persistCallback;
+    private final QueueToPersister.Head[] inputs;
+    private final QueueFromPersister.Tail[] outputs;
+    private final Serializer<Object, Object>[] serializers;
+    private final Configuration<Object, Object> configuration;
 
+    private long cursor;
     private boolean stopped;
     private boolean started;
-    private int initialIndex;
-    private int initialDataCursor;
-    private int initialSequnceCursor;
 
     Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Serializer<Object, Object>[] serializers, Configuration<Object, Object> configuration) {
-        queuesToPersister = inputs;
-        queuesFromPersister = outputs;
+        this.inputs = inputs;
+        this.outputs = outputs;
+        this.configuration = configuration;
+        this.serializers = serializers;
 
         started = false;
         stopped = false;
         finished = new CountDownLatch(1);
-        dataBufferHelper = new FileBufferHelper(configuration.getDataPath(), "data", configuration.getDataFileSize());
-        sequenceBufferHelper = new FileBufferHelper(configuration.getDataPath(), "sequence", configuration.getSequenceFileSize());
 
-        sync = configuration.isSync();
-        serializersHastable = serializers;
-        sizeOfInputBatch = configuration.getInputBatchSize();
-        sizeOfOutputBatch = configuration.getOutputBatchSize();
-        persistCallback = configuration.getPersistCallback();
-
-        // special simplified case when batch sizes are equal and only one input and only one output
-        flat = inputs.length == 1 && outputs.length == 1 && sizeOfInputBatch == sizeOfOutputBatch;
+        // scan files and load all
+        Scanner scanner = new Scanner(configuration);
+        initialScan = scanner.scan();
+        data = initialScan.getData();
+        sequence = initialScan.getSequence();
+        commits = initialScan.getCommits();
     }
 
     @Override
@@ -55,11 +50,12 @@ final class Persister implements Runnable {
         }
 
         try {
-            // initialize sequence
-            findLastSequence();
+            // prepare everything
+            initializeOutputs();
+            loadUncommitted();
 
-            // load all uncommited elements
-            processUncommitted();
+            // special simplified case when batch sizes are equal and only one input and only one output
+            boolean flat = inputs.length == 1 && outputs.length == 1 && configuration.getInputBatchSize() == configuration.getOutputBatchSize();
 
             // start reading new data
             if (flat) {
@@ -68,8 +64,7 @@ final class Persister implements Runnable {
                 processManyToMany();
             }
         } finally {
-            dataBufferHelper.close();
-            sequenceBufferHelper.close();;
+            closeFiles();
             finished.countDown();
         }
     }
@@ -83,7 +78,6 @@ final class Persister implements Runnable {
             stopped = true;
 
             if (!started) {
-                dataBufferHelper.close();
                 return;
             }
         }
@@ -96,11 +90,16 @@ final class Persister implements Runnable {
         }
     }
 
-    private void findLastSequence() {
-
+    private void initializeOutputs() {
+        ScanCommitElement[] scannedCommits = initialScan.getScannedCommits();
+        for (int i = 0; i < outputs.length; i++) {
+            QueueFromPersister.Tail output = outputs[i];
+            output.setCommit(commits[i]);
+            output.setSequenceId(scannedCommits[i].getSequenceId());
+        }
     }
 
-    private void processUncommitted() {
+    private void loadUncommitted() {
 
     }
 
@@ -110,32 +109,31 @@ final class Persister implements Runnable {
     }
 
     private void processManyToMany() {
-        PersistCallback<Object, Object> callback = persistCallback;
+        PersistCallback<Object, Object> callback = configuration.getPersistCallback();
 
-        Serializer<Object, Object>[] serializers = serializersHastable;
-        int serializersSize = serializers.length;
+        Serializer<Object, Object>[] serializersVar = serializers;
+        int serializersSize = serializersVar.length;
 
         int batchReady = 0;
-        int inputBatchSize = sizeOfInputBatch;
+        int inputBatchSize = configuration.getInputBatchSize();
+        int outputBatchSize = configuration.getOutputBatchSize();
         Object[] batch = new Object[inputBatchSize];
         int batchLeft = inputBatchSize;
 
         int inputIndex = 0;
-        QueueToPersister.Head[] inputs = queuesToPersister;
-        int inputsSize = inputs.length;
-        int inputIndexMark = inputsSize;
+        QueueToPersister.Head[] inputsVar = inputs;
+        int inputsSize = inputsVar.length;
 
         int outputIndex = 0;
-        int outputBatchSize = sizeOfOutputBatch;
-        QueueFromPersister.Tail[] outputs = queuesFromPersister;
-        int outputsSize = outputs.length;
+        QueueFromPersister.Tail[] outputsVar = outputs;
+        int outputsSize = outputsVar.length;
 
-        boolean syncAfterPersist = sync;
+        boolean syncAfterPersist = configuration.isSync();
         boolean notSyncAfterPersist = !syncAfterPersist;
         boolean batchSizeSame = inputBatchSize == outputBatchSize;
-        MappedByteBuffer dataBuffer = dataBufferHelper.getBuffer();
-        MappedByteBufferWrapper dataBufferWrapper = new MappedByteBufferWrapper(dataBuffer);
+        DataWriter dataWriter = data.newWriter(cursor);
 
+        int inputIndexMark = inputsSize;
         for (; ; ) {
             // cancel everything on deactivation
             if (stopped) {
@@ -143,7 +141,7 @@ final class Persister implements Runnable {
             }
 
             // get several available objects from queue
-            QueueToPersister.Head input = inputs[inputIndex % inputsSize];
+            QueueToPersister.Head input = inputsVar[inputIndex % inputsSize];
             int count = input.get(batch, batchReady, batchLeft);
             batchLeft -= count;
             batchReady += count;
@@ -172,8 +170,8 @@ final class Persister implements Runnable {
                 Object element = batch[index];
                 Object elementContext = batch[index | 1];
                 int typeHash = element.getClass().hashCode() % serializersSize;
-                Serializer<Object, Object> serializer = serializers[typeHash];
-                serializer.serialize(dataBufferWrapper, element, elementContext);
+                Serializer<Object, Object> serializer = serializersVar[typeHash];
+                serializer.serialize(dataWriter, element, elementContext);
                 
                 if (notSyncAfterPersist) {
                     callback.onElementPersisted(element, elementContext);
@@ -182,7 +180,7 @@ final class Persister implements Runnable {
 
             // sync IO if needed
             if (syncAfterPersist) {
-                dataBuffer.force();
+                dataWriter.sync();
                 
                 // execute callback after sync
                 for (int i = 0; i < batchReady; i++) {
@@ -196,7 +194,7 @@ final class Persister implements Runnable {
             // push persisted objects
             if (batchSizeSame) {
                 // if input and output batch sizes are equal
-                outputs[outputIndex % outputsSize].add(batch, batchReady, batchLeft);
+                outputsVar[outputIndex % outputsSize].add(batch, batchReady, batchLeft);
                 batchReady = 0;
                 outputIndex++;
             } else {
@@ -205,10 +203,10 @@ final class Persister implements Runnable {
                 for (; ; ) {
                     if (batchReady > outputBatchSize) {
                         batchReady -= outputBatchSize;
-                        outputs[outputIndex % outputsSize].add(batch, outputBatchOffset, outputBatchSize);
+                        outputsVar[outputIndex % outputsSize].add(batch, outputBatchOffset, outputBatchSize);
                         outputBatchOffset += outputBatchSize;
                     } else {
-                        outputs[outputIndex % outputsSize].add(batch, outputBatchOffset, batchReady);
+                        outputsVar[outputIndex % outputsSize].add(batch, outputBatchOffset, batchReady);
                         batchReady = 0;
                         break;
                     }
@@ -219,6 +217,20 @@ final class Persister implements Runnable {
 
             // retrigger buffer
             batchLeft = inputBatchSize;
+        }
+    }
+
+    private void closeFiles() {
+        if (data != null) {
+            data.close();
+        }
+
+        if (sequence != null) {
+            sequence.close();
+        }
+
+        if (commits != null) {
+            Stream.of(commits).forEach(Commit::close);
         }
     }
 }
