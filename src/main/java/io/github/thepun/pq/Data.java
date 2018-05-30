@@ -2,11 +2,15 @@ package io.github.thepun.pq;
 
 final class Data {
 
-    DataWriter newWriter(long cursor) {
+    DataWriter newWriter() {
 
     }
 
-    DataReader newReader(long cursor) {
+    DataReader newReader() {
+
+    }
+
+    void sync() {
 
     }
 

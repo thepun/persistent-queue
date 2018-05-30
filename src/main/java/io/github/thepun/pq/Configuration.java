@@ -15,7 +15,7 @@ public final class Configuration<T, C> {
     private int initialFreeNodes;
     private String dataPath;
     private PersistCallback<T, C> persistCallback;
-    private Map<Class<? extends T>, Serializer<? extends T, ? extends C>> serializers;
+    private Map<Class<? extends T>, Marshaller<? extends T, ? extends C>> serializers;
 
     public int getTailCount() {
         return tailCount;
@@ -41,11 +41,11 @@ public final class Configuration<T, C> {
         this.dataPath = dataPath;
     }
 
-    public Map<Class<? extends T>, Serializer<? extends T, ? extends C>> getSerializers() {
+    public Map<Class<? extends T>, Marshaller<? extends T, ? extends C>> getSerializers() {
         return serializers;
     }
 
-    public void setSerializers(Map<Class<? extends T>, Serializer<? extends T, ? extends C>> serializers) {
+    public void setSerializers(Map<Class<? extends T>, Marshaller<? extends T, ? extends C>> serializers) {
         this.serializers = serializers;
     }
 

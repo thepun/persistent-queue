@@ -11,7 +11,7 @@ final class ScanCommitElement {
     private long minAvailableUncommittedSequenceCursor;
     private long maxAvailableUncommittedSequenceId;
     private long maxAvailableUncommittedSequenceCursor;
-    private boolean hasUncommittedData;
+    private boolean uncommittedData;
     private Commit commit;
 
     public long getId() {
@@ -54,12 +54,12 @@ final class ScanCommitElement {
         this.firstUncommittedSequenceCursor = firstUncommittedSequenceCursor;
     }
 
-    public boolean isHasUncommittedData() {
-        return hasUncommittedData;
+    public boolean isUncommittedData() {
+        return uncommittedData;
     }
 
-    public void setHasUncommittedData(boolean hasUncommittedData) {
-        this.hasUncommittedData = hasUncommittedData;
+    public void setUncommittedData(boolean uncommittedData) {
+        this.uncommittedData = uncommittedData;
     }
 
     public Commit getCommit() {

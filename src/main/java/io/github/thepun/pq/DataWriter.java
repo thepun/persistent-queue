@@ -54,15 +54,15 @@ final class DataWriter implements WriteBuffer {
 
     }
 
+    void mark(long sequenceId) {
+
+    }
+
     void setCursor(long cursor) {
 
     }
 
     long getCursor() {
         return cursor;
-    }
-
-    void sync() {
-
     }
 }

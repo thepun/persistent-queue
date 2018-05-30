@@ -7,6 +7,8 @@ final class ScanResult {
     private Commit[] commits;
     private ScanCommitElement[] scannedCommits;
 
+    private long maxAvailableSequnceId;
+    private long maxAvailableSequnceCursor;
     private long minAvailableSequenceId;
     private long minAvailableSequenceCursor;
 
@@ -56,5 +58,21 @@ final class ScanResult {
 
     public void setMinAvailableSequenceCursor(long minAvailableSequenceCursor) {
         this.minAvailableSequenceCursor = minAvailableSequenceCursor;
+    }
+
+    public long getMaxAvailableSequnceId() {
+        return maxAvailableSequnceId;
+    }
+
+    public void setMaxAvailableSequnceId(long maxAvailableSequnceId) {
+        this.maxAvailableSequnceId = maxAvailableSequnceId;
+    }
+
+    public long getMaxAvailableSequnceCursor() {
+        return maxAvailableSequnceCursor;
+    }
+
+    public void setMaxAvailableSequnceCursor(long maxAvailableSequnceCursor) {
+        this.maxAvailableSequnceCursor = maxAvailableSequnceCursor;
     }
 }

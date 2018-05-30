@@ -16,10 +16,6 @@ final class Sequence {
 
     }
 
-    void next() {
-
-    }
-
     void previous() {
 
     }
@@ -32,13 +28,22 @@ final class Sequence {
 
     }
 
-    long getOutput() {
+    int getOutput() {
 
     }
 
-    void setOutput(long output) {
+    void setOutput(int output) {
 
     }
+
+    int getElementType() {
+
+    }
+
+    void setElementType(int elementType) {
+
+    }
+
 
     long getElementCursor() {
 
@@ -53,6 +58,22 @@ final class Sequence {
     }
 
     void setElementLength(long elementLength) {
+
+    }
+
+    long getNextElementCursor() {
+
+    }
+
+    long getNextId() {
+
+    }
+
+    void next() {
+
+    }
+
+    void commit() {
 
     }
 

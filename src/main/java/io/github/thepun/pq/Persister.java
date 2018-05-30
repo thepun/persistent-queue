@@ -1,5 +1,6 @@
 package io.github.thepun.pq;
 
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Stream;
 
@@ -12,18 +13,18 @@ final class Persister implements Runnable {
     private final CountDownLatch finished;
     private final QueueToPersister.Head[] inputs;
     private final QueueFromPersister.Tail[] outputs;
-    private final Serializer<Object, Object>[] serializers;
     private final Configuration<Object, Object> configuration;
+    private final Marshaller<Object, Object>[] marshallersById;
+    private final Marshaller<Object, Object>[] marshallersByClass;
+    private final int[] marshallerIdByClass;
 
-    private long cursor;
     private boolean stopped;
     private boolean started;
 
-    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Serializer<Object, Object>[] serializers, Configuration<Object, Object> configuration) throws PersistenceException {
+    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Configuration<Object, Object> configuration) throws PersistenceException {
         this.inputs = inputs;
         this.outputs = outputs;
         this.configuration = configuration;
-        this.serializers = serializers;
 
         started = false;
         stopped = false;
@@ -35,6 +36,60 @@ final class Persister implements Runnable {
         data = initialScan.getData();
         sequence = initialScan.getSequence();
         commits = initialScan.getCommits();
+
+        Map<Class<?>, Marshaller<?, ?>> serializersMap = configuration.getSerializers();
+
+        // prepare marshallers by class
+        int size1 = MathUtil.nextGreaterPrime(serializersMap.size());
+        int[] localMarshallerIdsByClass = new int[size1];
+        Marshaller<Object, Object>[] localMarshallersByClass = new Marshaller[size1];
+        upperLoop:
+        for (; ; ) {
+            for (Map.Entry<Class<?>, Marshaller<?, ?>> entry : serializersMap.entrySet()) {
+                Class<?> type = entry.getKey();
+                int typeHash = type.hashCode() % size1;
+
+                // if we found element with same hash restart with grather hash table size
+                Marshaller<?, ?> anotherMarshaller = localMarshallersByClass[typeHash];
+                if (anotherMarshaller != null) {
+                    size1 = MathUtil.nextGreaterPrime(size1);
+                    localMarshallerIdsByClass = new int[size1];
+                    localMarshallersByClass = new Marshaller[size1];
+                    continue upperLoop;
+                }
+
+                Marshaller<Object, Object> marshaller = (Marshaller<Object, Object>) entry.getValue();
+                localMarshallersByClass[typeHash] = marshaller;
+                localMarshallerIdsByClass[typeHash] = marshaller.getTypeId();
+            }
+
+            break;
+        }
+        marshallersByClass = localMarshallersByClass;
+        marshallerIdByClass = localMarshallerIdsByClass;
+
+        // prepare marshallers by type id
+        int size2 = MathUtil.nextGreaterPrime(serializersMap.size());
+        Marshaller<Object, Object>[] localMarshallersById = new Marshaller[size2];
+        upperLoop:
+        for (; ; ) {
+            for (Map.Entry<Class<?>, Marshaller<?, ?>> entry : serializersMap.entrySet()) {
+                int typeHash = entry.getValue().getTypeId() % size2;
+
+                // if we found element with same hash restart with grather hash table size
+                Marshaller<?, ?> anotherMarshaller = localMarshallersById[typeHash];
+                if (anotherMarshaller != null) {
+                    size2 = MathUtil.nextGreaterPrime(size2);
+                    localMarshallersById = new Marshaller[size2];
+                    continue upperLoop;
+                }
+
+                localMarshallersById[typeHash] = (Marshaller<Object, Object>) entry.getValue();
+            }
+
+            break;
+        }
+        marshallersById = localMarshallersById;
     }
 
     @Override
@@ -106,32 +161,84 @@ final class Persister implements Runnable {
             output.setCommit(commits[i]);
             output.setSequenceId(scannedCommits[i].getSequenceId());
         }
+
+        // initialize sequence to latest consistent element
+        sequence.setCursor(initialScan.getMaxAvailableSequnceCursor());
     }
 
     private void loadUncommitted() {
         Logger.info("Loading uncommitted elements");
 
-        for (int i = 0; i < outputs.length; i++) {
+        Object[] batch = null;
+        DataReader reader = null;
 
+        ScanCommitElement[] scannedCommits = initialScan.getScannedCommits();
+        for (int outputIndex = 0; outputIndex < outputs.length; outputIndex++) {
+            long initialSequenceCursor = sequence.getCursor();
 
+            ScanCommitElement scannedCommit = scannedCommits[outputIndex];
+            if (scannedCommit.isUncommittedData()) {
+                Logger.warn("Found uncommitted data in queue {}", outputIndex);
 
+                if (reader == null) {
+                    reader = data.newReader();
+                }
+                if (batch == null) {
+                    batch = new Object[configuration.getOutputBatchSize()];
+                }
 
+                sequence.setCursor(scannedCommit.getMinAvailableUncommittedSequenceCursor());
 
+                int batchIndex = 0;
+                do {
+                    // skip elements from another output
+                    if (sequence.getOutput() != outputIndex) {
+                        continue;
+                    }
 
+                    // try to fin marshaller for current element
+                    int elementType = sequence.getElementType();
+                    int typeHash = elementType % marshallersById.length;
+                    Marshaller<Object, Object> marshaller = marshallersById[typeHash];
+                    if (marshaller == null || marshaller.getTypeId() != elementType) {
+                        Logger.error("Failed to find marshaller for type with id {}", elementType);
+                    }
 
+                    // read element from data file
+                    reader.setCursor(sequence.getElementCursor());
+                    reader.setLimit(sequence.getElementLength());
+                    Object element;
+                    try {
+                        element = marshaller.deserialize(reader);
+                    } catch (Throwable e) {
+                        Logger.error(e, "Error during unmarshalling element at {} of type {}", sequence.getElementCursor(), elementType);
+                        sequence.next();
+                        continue;
+                    }
 
+                    // put element to batch
+                    if (element != null) {
+                        batch[batchIndex++] = element;
+                    } else {
+                        Logger.error("Null unmarshalled element at {} of type {}", sequence.getElementCursor(), elementType);
+                    }
 
+                    // push unmarshalled objects to queue if batch is full
+                    if (batchIndex == batch.length) {
+                        outputs[outputIndex].add(batch, 0, batch.length);
+                    }
 
+                    sequence.next();
+                } while (sequence.getId() <= scannedCommit.getMaxAvailableUncommittedSequenceId());
 
+                // push rest unmarshalled objects to queue
+                if (batchIndex > 0) {
+                    outputs[outputIndex].add(batch, 0, batchIndex);
+                }
 
-
-
-
-
-
-
-
-
+                // restore sequence
+                sequence.setCursor(initialSequenceCursor);
+            }
         }
     }
 
@@ -145,8 +252,14 @@ final class Persister implements Runnable {
 
         PersistCallback<Object, Object> callback = configuration.getPersistCallback();
 
-        Serializer<Object, Object>[] serializersVar = serializers;
-        int serializersSize = serializersVar.length;
+        Data dataVar = data;
+        Sequence sequenceVar = sequence;
+        DataWriter writer = dataVar.newWriter();
+        writer.setCursor(sequenceVar.getNextElementCursor());
+        long sequenceId = initialScan.getMaxAvailableSequnceId() + 1;
+
+        Marshaller<Object, Object>[] marshallers = marshallersByClass;
+        int serializersSize = marshallers.length;
 
         int batchReady = 0;
         int inputBatchSize = configuration.getInputBatchSize();
@@ -165,7 +278,6 @@ final class Persister implements Runnable {
         boolean syncAfterPersist = configuration.isSync();
         boolean notSyncAfterPersist = !syncAfterPersist;
         boolean batchSizeSame = inputBatchSize == outputBatchSize;
-        DataWriter dataWriter = data.newWriter(cursor);
 
         int inputIndexMark = inputsSize;
         for (; ; ) {
@@ -204,9 +316,31 @@ final class Persister implements Runnable {
                 Object element = batch[index];
                 Object elementContext = batch[index | 1];
                 int typeHash = element.getClass().hashCode() % serializersSize;
-                Serializer<Object, Object> serializer = serializersVar[typeHash];
-                serializer.serialize(dataWriter, element, elementContext);
-                
+                Marshaller<Object, Object> marshaller = marshallers[typeHash];
+
+                // write to data file
+                long initialDataCursor = writer.getCursor();
+                writer.mark(sequenceId);
+                try {
+                    marshaller.serialize(writer, element, elementContext);
+                } catch (Throwable e) {
+                    Logger.error(e, "Error during marshalling element {}", element);
+                    writer.setCursor(initialDataCursor);
+                    continue;
+                }
+                writer.mark(sequenceId);
+
+                // write to sequence file
+                sequenceVar.next();
+                sequenceVar.setId(sequenceId);
+                sequenceVar.setOutput(outputIndex);
+                sequenceVar.setElementCursor(initialDataCursor);
+                sequenceVar.setElementLength(writer.getCursor() - initialDataCursor);
+                sequenceVar.setElementType(marshallerIdByClass[typeHash]);
+                sequenceVar.commit();
+                sequenceId++;
+
+                // execute callback if no synchronization with device is required
                 if (notSyncAfterPersist) {
                     callback.onElementPersisted(element, elementContext);
                 }
@@ -214,8 +348,9 @@ final class Persister implements Runnable {
 
             // sync IO if needed
             if (syncAfterPersist) {
-                dataWriter.sync();
-                
+                dataVar.sync();
+                sequenceVar.sync();
+
                 // execute callback after sync
                 for (int i = 0; i < batchReady; i++) {
                     int index = i << 1;
@@ -267,4 +402,5 @@ final class Persister implements Runnable {
             Stream.of(commits).forEach(Commit::close);
         }
     }
+
 }
