@@ -1,6 +1,6 @@
 package io.github.thepun.pq;
 
-public final class PersistenceException extends RuntimeException {
+public final class PersistenceException extends Exception {
 
     PersistenceException(String message) {
         super(message);

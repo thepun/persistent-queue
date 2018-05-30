@@ -14,7 +14,7 @@ final class Scanner {
         this.configuration = configuration;
     }
 
-    ScanResult scan() {
+    ScanResult scan() throws PersistenceException {
         FileSystem fileSystem = FileSystems.getDefault();
 
         // check root directory

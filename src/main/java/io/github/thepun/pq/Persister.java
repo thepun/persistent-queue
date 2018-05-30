@@ -1,6 +1,5 @@
 package io.github.thepun.pq;
 
-import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Stream;
 
@@ -20,7 +19,7 @@ final class Persister implements Runnable {
     private boolean stopped;
     private boolean started;
 
-    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Serializer<Object, Object>[] serializers, Configuration<Object, Object> configuration) {
+    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, Serializer<Object, Object>[] serializers, Configuration<Object, Object> configuration) throws PersistenceException {
         this.inputs = inputs;
         this.outputs = outputs;
         this.configuration = configuration;
@@ -40,6 +39,8 @@ final class Persister implements Runnable {
 
     @Override
     public void run() {
+        Logger.info("Activating persister");
+
         synchronized (this) {
             // run only once
             if (started || stopped) {
@@ -63,6 +64,8 @@ final class Persister implements Runnable {
             } else {
                 processManyToMany();
             }
+        } catch (Throwable e) {
+            Logger.error(e, "Error during processing of the queue");
         } finally {
             closeFiles();
             finished.countDown();
@@ -70,6 +73,8 @@ final class Persister implements Runnable {
     }
 
     void deactivate() {
+        Logger.info("Deactivating persister");
+
         synchronized (this) {
             if (stopped) {
                 return;
@@ -86,11 +91,15 @@ final class Persister implements Runnable {
         try {
             finished.await();
         } catch (InterruptedException e) {
-            // just skip
+            Logger.error(e, "Interrupted during wait for persister to finish");
         }
+
+        Logger.info("Persister fully stopped");
     }
 
     private void initializeOutputs() {
+        Logger.info("Initializing output queues");
+
         ScanCommitElement[] scannedCommits = initialScan.getScannedCommits();
         for (int i = 0; i < outputs.length; i++) {
             QueueFromPersister.Tail output = outputs[i];
@@ -100,7 +109,30 @@ final class Persister implements Runnable {
     }
 
     private void loadUncommitted() {
+        Logger.info("Loading uncommitted elements");
 
+        for (int i = 0; i < outputs.length; i++) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
     }
 
     private void processOneToOne() {
@@ -109,6 +141,8 @@ final class Persister implements Runnable {
     }
 
     private void processManyToMany() {
+        Logger.info("Processing new elements with multiple I/O");
+
         PersistCallback<Object, Object> callback = configuration.getPersistCallback();
 
         Serializer<Object, Object>[] serializersVar = serializers;
