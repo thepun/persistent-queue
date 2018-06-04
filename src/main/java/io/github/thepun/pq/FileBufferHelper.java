@@ -11,7 +11,7 @@ final class FileBufferHelper {
     private final FileChannel file;
     private final MappedByteBuffer buffer;
 
-    FileBufferHelper(Path path, int size) {
+    FileBufferHelper(Path path, int size) throws PersistenceException {
         try {
             file = FileChannel.open(path, StandardOpenOption.READ, StandardOpenOption.WRITE);
         } catch (IOException e) {

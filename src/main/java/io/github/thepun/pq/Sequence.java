@@ -1,5 +1,7 @@
 package io.github.thepun.pq;
 
+import java.nio.MappedByteBuffer;
+
 final class Sequence {
 
     private static final int SEQUENCE_ELEMENT_SIZE = 32;
@@ -7,6 +9,16 @@ final class Sequence {
     private static final int SEQUENCE_OUTPUT_OFFSET = 8;
     private static final int SEQUENCE_ELEMENT_CURSOR_OFFSET = 16;
     private static final int SEQUENCE_ELEMENT_LENGTH_OFFSET = 24;
+
+
+    private final FileBufferHelper helper;
+    private final MappedByteBuffer buffer;
+
+    Sequence(FileBufferHelper helper) {
+        this.helper = helper;
+
+        buffer = helper.getBuffer();
+    }
 
     long getCursor() {
 
@@ -58,6 +70,14 @@ final class Sequence {
     }
 
     long getNextId() {
+
+    }
+
+    int getEntriesCount() {
+
+    }
+
+    void initial() {
 
     }
 

@@ -23,44 +23,52 @@ final class Scanner {
             throw new PersistenceException("Data path not found: " + rootPath);
         }
 
+        ScanResultElement[] elements = new ScanResultElement[configuration.getTailCount()];
+        for (int inputIndex = 0; inputIndex < configuration.getTailCount(); inputIndex++) {
+            ScanResultElement element = scanElement(rootPath, inputIndex);
+            elements[inputIndex] = element;
+        }
+    }
+
+    private ScanResultElement initialElement(Path rootPath, int inputIndex) {
+        clearElementFiles(rootPath, inputIndex);
+
+
+    }
+
+    private ScanResultElement scanElement(Path rootPath, int inputIndex) throws PersistenceException {
+        ScanResultElement element = new ScanResultElement();
+
         // check sequence file
-        Path sequencePath = rootPath.resolveSibling("sequence");
+        Path sequencePath = rootPath.resolveSibling("sequence_" + inputIndex);
         if (!Files.exists(sequencePath)) {
-            return initial(rootPath);
+            return initialElement(rootPath, inputIndex);
         }
 
         // check data file
-        Path dataPath = rootPath.resolveSibling("data");
+        Path dataPath = rootPath.resolveSibling("data_" + inputIndex);
 
         // initial files
-        FileBufferHelper dataBufferHelper = new FileBufferHelper(configuration.getDataPath(), "data", configuration.getDataFileSize());
-        FileBufferHelper sequenceBufferHelper = new FileBufferHelper(configuration.getDataPath(), "sequence", configuration.getSequenceFileSize());
+        FileBufferHelper dataBufferHelper = new FileBufferHelper(dataPath, configuration.getDataFileSize());
+        Data data = new Data(dataBufferHelper);
 
-        // scan for commit filea
-
-
-        FileBufferHelper[] commitBufferHelpers = new FileBufferHelper[outputs.length];
-        for (int i = 0; i < outputs.length; i++) {
-            commitBufferHelpers[i] = new FileBufferHelper(configuration.getDataPath(), "commit_" + i, configuration.getSequenceFileSize());
-        }
-
-
-        MappedByteBuffer buffer = sequenceBufferHelper.getBuffer();
+        // scan sequence
+        FileBufferHelper sequenceBufferHelper = new FileBufferHelper(sequencePath, configuration.getSequenceFileSize());
+        Sequence sequence = new Sequence(sequenceBufferHelper);
+        Commit commit = new Commit(sequenceBufferHelper);
 
         long lastId = -1;
         long lastDataCursor = 0;
         long lastDataLength = 0;
         long lastSequenceCursor = 0;
-        for (int i = 0; i < sizeOfSequence; i += SEQUENCE_ELEMENT_SIZE) {
-            long id = buffer.getLong(i + SEQUENCE_ID_OFFSET);
-            long cursor = buffer.getLong(i + SEQUENCE_CURSOR_OFFSET);
-            long length = buffer.getLong(i + SEQUENCE_LENGTH_OFFSET);
-            if (id > lastId) {
-                lastId = id;
-                lastDataCursor = cursor;
-                lastDataLength = length;
+        sequence.initial();
+        for (int i = 0; i < sequence.getEntriesCount(); i ++) {
+            if (sequence.getId() > lastId) {
+                lastId = sequence.getId();
+                lastDataCursor = sequence.getElementCursor();
+                lastDataLength = sequence.getElementLength();
                 lastSequenceCursor = i;
-            } else if (id == 0) {
+            } else if (sequence.getId() == 0) {
                 break;
             }
         }
@@ -69,15 +77,11 @@ final class Scanner {
         initialSequnceCursor = lastSequenceCursor;
         initialDataCursor = lastDataCursor;
         initialDataLength = lastDataLength;
+
+        return element;
     }
 
-    private ScanResult initial(Path rootPath) {
-        clearAllFiles(rootPath);
-
-
-    }
-
-    private void clearAllFiles(Path rootPath) {
+    private void clearElementFiles(Path rootPath, int inputIndex) {
 
     }
 }
