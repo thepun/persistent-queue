@@ -5,21 +5,21 @@ import java.util.stream.Stream;
 public final class PersistentQueue<T, C> {
 
     private final Persister persister;
-    private final QueueToPersister[] tails;
-    private final QueueFromPersister[] heads;
+    private final Pipeline[] tails;
+    private final BufferedQueueFromPersister[] heads;
 
     public PersistentQueue(Configuration<T, C> configuration) throws PersistenceException {
         Configuration<Object, Object> objectConfiguration = (Configuration<Object, Object>) configuration;
 
-        QueueFromPersister[] headsToUse = new QueueFromPersister[configuration.getHeadCount()];
+        BufferedQueueFromPersister[] headsToUse = new BufferedQueueFromPersister[configuration.getHeadCount()];
         for (int i = 0; i < headsToUse.length; i++) {
-            headsToUse[i] = new QueueFromPersister(objectConfiguration);
+            headsToUse[i] = new BufferedQueueFromPersister(objectConfiguration);
         }
         heads = headsToUse;
 
-        QueueToPersister[] tailsToUse = new QueueToPersister[configuration.getTailCount()];
+        Pipeline[] tailsToUse = new Pipeline[configuration.getTailCount()];
         for (int i = 0; i < tailsToUse.length; i++) {
-            tailsToUse[i] = new QueueToPersister(objectConfiguration);
+            tailsToUse[i] = new Pipeline(objectConfiguration);
         }
         tails = tailsToUse;
 
@@ -28,8 +28,8 @@ public final class PersistentQueue<T, C> {
         ScanResult scanResult = scanner.scan();
 
         // persister
-        QueueToPersister.Head[] inputs = Stream.of(heads).map(QueueFromPersister::getTail).toArray(QueueToPersister.Head[]::new);
-        QueueFromPersister.Tail[] outputs = Stream.of(tails).map(QueueToPersister::getHead).toArray(QueueFromPersister.Tail[]::new);
+        Pipeline.Head[] inputs = Stream.of(heads).map(BufferedQueueFromPersister::getTail).toArray(Pipeline.Head[]::new);
+        BufferedQueueFromPersister.Tail[] outputs = Stream.of(tails).map(Pipeline::getHead).toArray(BufferedQueueFromPersister.Tail[]::new);
         persister = new Persister(inputs, outputs, scanResult, objectConfiguration);
     }
 

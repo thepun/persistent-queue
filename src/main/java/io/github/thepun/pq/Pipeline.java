@@ -1,44 +1,84 @@
 package io.github.thepun.pq;
 
 import io.github.thepun.unsafe.MemoryFence;
+import sun.misc.Contended;
 
-final class QueueToPersister implements PersistentQueueTail<Object, Object> {
+@Contended
+final class Pipeline implements PersistentQueueTail<Object, Object> {
 
-    private final TailCursor tailCursor;
+    private static final int NODE_SIZE = 18;
+    private static final int NEXT_NODE_INDEX = NODE_SIZE - 1;
+    private static final int NODE_DATA_SHIFT = 4;
+    private static final int NODE_DATA_SIZE = 16;
+    private static final int NODE_DATA_SIZE_MASK = NODE_DATA_SIZE - 1;
+    private static final int NEXT_FREE_NODE_INDEX = 1;
+    private static final int NODE_GENERATION_INDEX = 0;
 
-    QueueToPersister(TailCursor tailCursor) {
-        this.tailCursor = tailCursor;
+
+    private final Head head;
+
+    private long writeIndex;
+    private long nodeIndex;
+    private Object[] currentNode;
+    private Object[] localFreeNode;
+
+    private int currentExternalFreeNodeGen;
+    private Object[] currentExternalFreeNode;
+
+    private int previousExternalFreeNodeGen;
+    private Object[] previousExternalFreeNode;
+
+    @Contended("external")
+    private Object[] externalFreeNode;
+
+    Pipeline(Configuration<Object, Object> configuration) {
+        // TODO: implement multiple free nodes to be initialized on start not just one
+
+        currentNode = createNewNode();
+        localFreeNode = createNewNode();
+        externalFreeNode = createNewNode();
+        previousExternalFreeNode = createNewNode();
+        currentExternalFreeNode = externalFreeNode;
+        currentExternalFreeNode[NEXT_FREE_NODE_INDEX] = previousExternalFreeNode;
+
+        head = new Head(this);
+
+        MemoryFence.full();
     }
 
     @Override
     public void add(Object element, Object elementContext) {
-        TailCursor tailCursorVar = tailCursor;
+        long writerIndexVar = writeIndex;
+        long nodeIndexVar = nodeIndex;
+        Object[] currentNodeVar = currentNode;
 
-        long writerIndexVar = tailCursorVar.getCursor();
-        long nodeIndexVar = tailCursorVar.getNodeIndex();
-        Object[] currentNodeVar = tailCursorVar.getCurrentNode();
-
-        long elementNodeIndex = writerIndexVar >> NodeUtil.NODE_DATA_SHIFT;
+        long elementNodeIndex = writerIndexVar >> NODE_DATA_SHIFT;
         if (elementNodeIndex != nodeIndexVar) {
+            // remember node index
+            nodeIndex = elementNodeIndex;
+
             // get new node
             Object[] newNode = getFreeNode();
             currentNodeVar = newNode;
-            tailCursorVar.setNodeIndex(elementNodeIndex);
-            tailCursorVar.setCurrentNode(newNode);
+            currentNode = newNode;
 
             // reassure we do not expose new node before it is ready
             MemoryFence.store();
 
             // attach new node to chain
-            currentNodeVar[NodeUtil.NEXT_NODE_INDEX] = newNode;
+            currentNodeVar[NEXT_NODE_INDEX] = newNode;
         }
 
-        tailCursorVar.setCursor(writerIndexVar + 2);
+        writeIndex = writerIndexVar + 2;
 
-        int elementIndex = (int) (writerIndexVar & NodeUtil.NODE_DATA_SIZE_MASK);
+        int elementIndex = (int) (writerIndexVar & NODE_DATA_SIZE_MASK);
         currentNodeVar[elementIndex | 1] = elementContext;
         MemoryFence.store();
         currentNodeVar[elementIndex] = element;
+    }
+
+    Head getHead() {
+        return head;
     }
 
     private Object[] getFreeNode() {
@@ -88,4 +128,13 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         localFreeNode = nextNode;
         return externalFreeNodeVar;
     }
+
+    private static Object[] createNewNode() {
+        Generation generation = new Generation();
+        Object[] node = new Object[NODE_SIZE];
+        node[NODE_GENERATION_INDEX] = generation;
+        return node;
+    }
+
+
 }

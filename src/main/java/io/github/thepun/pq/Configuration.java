@@ -5,7 +5,6 @@ import java.util.concurrent.ThreadFactory;
 
 public final class Configuration<T, C> {
 
-    private boolean sync;
     private int headCount;
     private int tailCount;
     private int dataFileSize;
@@ -57,14 +56,6 @@ public final class Configuration<T, C> {
 
     public void setPersistCallback(PersistCallback<T, C> persistCallback) {
         this.persistCallback = persistCallback;
-    }
-
-    public boolean isSync() {
-        return sync;
-    }
-
-    public void setSync(boolean sync) {
-        this.sync = sync;
     }
 
     public int getInitialFreeNodes() {

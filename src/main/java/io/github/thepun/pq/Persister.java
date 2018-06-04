@@ -11,8 +11,8 @@ final class Persister implements Runnable {
     private final Commit[] commits;
     private final ScanResult scanResult;
     private final CountDownLatch finished;
-    private final QueueToPersister.Head[] inputs;
-    private final QueueFromPersister.Tail[] outputs;
+    private final Pipeline.Head[] inputs;
+    private final BufferedQueueFromPersister.Tail[] outputs;
     private final Configuration<Object, Object> configuration;
     private final Marshaller<Object, Object>[] marshallersById;
     private final Marshaller<Object, Object>[] marshallersByClass;
@@ -21,7 +21,7 @@ final class Persister implements Runnable {
     private boolean stopped;
     private boolean started;
 
-    Persister(QueueToPersister.Head[] inputs, QueueFromPersister.Tail[] outputs, ScanResult scanResult, Configuration<Object, Object> configuration) throws PersistenceException {
+    Persister(Pipeline.Head[] inputs, BufferedQueueFromPersister.Tail[] outputs, ScanResult scanResult, Configuration<Object, Object> configuration) throws PersistenceException {
         this.inputs = inputs;
         this.outputs = outputs;
         this.scanResult = scanResult;
@@ -154,7 +154,9 @@ final class Persister implements Runnable {
 
         ScanCommitElement[] scannedCommits = scanResult.getScannedCommits();
         for (int i = 0; i < outputs.length; i++) {
-            QueueFromPersister.Tail output = outputs[i];
+            BufferedQueueFromPersister.Tail output = outputs[i];
+            output.setData(data);
+            output.setSequence(sequence);
             output.setCommit(commits[i]);
             output.setSequenceId(scannedCommits[i].getSequenceId());
         }
@@ -199,6 +201,8 @@ final class Persister implements Runnable {
                     Marshaller<Object, Object> marshaller = marshallersById[typeHash];
                     if (marshaller == null || marshaller.getTypeId() != elementType) {
                         Logger.error("Failed to find marshaller for type with id {}", elementType);
+                        sequence.next();
+                        continue;
                     }
 
                     // read element from data file
@@ -222,7 +226,13 @@ final class Persister implements Runnable {
 
                     // push unmarshalled objects to queue if batch is full
                     if (batchIndex == batch.length) {
-                        outputs[outputIndex].add(batch, 0, batch.length);
+                        int done = 0;
+                        int rest = batch.length;
+                        do {
+                            int size = outputs[outputIndex].add(batch, done, rest);
+                            done += size;
+                            rest += size;
+                        } while (rest > 0);
                     }
 
                     sequence.next();
@@ -265,16 +275,12 @@ final class Persister implements Runnable {
         int batchLeft = inputBatchSize;
 
         int inputIndex = 0;
-        QueueToPersister.Head[] inputsVar = inputs;
+        Pipeline.Head[] inputsVar = inputs;
         int inputsSize = inputsVar.length;
 
         int outputIndex = 0;
-        QueueFromPersister.Tail[] outputsVar = outputs;
+        BufferedQueueFromPersister.Tail[] outputsVar = outputs;
         int outputsSize = outputsVar.length;
-
-        boolean syncAfterPersist = configuration.isSync();
-        boolean notSyncAfterPersist = !syncAfterPersist;
-        boolean batchSizeSame = inputBatchSize == outputBatchSize;
 
         int inputIndexMark = inputsSize;
         for (; ; ) {
@@ -284,7 +290,7 @@ final class Persister implements Runnable {
             }
 
             // get several available objects from queue
-            QueueToPersister.Head input = inputsVar[inputIndex % inputsSize];
+            Pipeline.Head input = inputsVar[inputIndex % inputsSize];
             int count = input.get(batch, batchReady, batchLeft);
             batchLeft -= count;
             batchReady += count;
@@ -337,24 +343,8 @@ final class Persister implements Runnable {
                 sequenceVar.commit();
                 sequenceId++;
 
-                // execute callback if no synchronization with device is required
-                if (notSyncAfterPersist) {
-                    callback.onElementPersisted(element, elementContext);
-                }
-            }
-
-            // sync IO if needed
-            if (syncAfterPersist) {
-                dataVar.sync();
-                sequenceVar.sync();
-
-                // execute callback after sync
-                for (int i = 0; i < batchReady; i++) {
-                    int index = i << 1;
-                    Object element = batch[index];
-                    Object elementContext = batch[index | 1];
-                    callback.onElementPersisted(element, elementContext);
-                }
+                // execute callback
+                callback.onElementPersisted(element, elementContext);
             }
 
             // push persisted objects

@@ -6,6 +6,10 @@ final class Commit {
 
     }
 
+    void sync() {
+
+    }
+
     void close() {
 
     }
