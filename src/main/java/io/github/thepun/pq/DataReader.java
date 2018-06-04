@@ -13,4 +13,8 @@ final class DataReader implements ReadBuffer {
     void setLimit(long limit) {
 
     }
+
+    void close() {
+
+    }
 }

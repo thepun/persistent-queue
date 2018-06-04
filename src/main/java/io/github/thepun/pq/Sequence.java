@@ -28,14 +28,6 @@ final class Sequence {
 
     }
 
-    int getOutput() {
-
-    }
-
-    void setOutput(int output) {
-
-    }
-
     int getElementType() {
 
     }

@@ -1,35 +1,26 @@
 package io.github.thepun.pq;
 
+import io.github.thepun.unsafe.MemoryFence;
+
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.Stream;
 
 final class Persister implements Runnable {
 
-    private final Data data;
-    private final Sequence sequence;
-    private final Commit[] commits;
-    private final ScanResult scanResult;
+    private final Pipeline[] pipelines;
     private final CountDownLatch finished;
-    private final Pipeline.Head[] inputs;
-    private final BufferedQueueFromPersister.Tail[] outputs;
-    private final Configuration<Object, Object> configuration;
+    private final PersistCallback<Object, Object> callback;
+
+    private final int[] marshallerIdByClass;
     private final Marshaller<Object, Object>[] marshallersById;
     private final Marshaller<Object, Object>[] marshallersByClass;
-    private final int[] marshallerIdByClass;
 
     private boolean stopped;
     private boolean started;
 
-    Persister(Pipeline.Head[] inputs, BufferedQueueFromPersister.Tail[] outputs, ScanResult scanResult, Configuration<Object, Object> configuration) throws PersistenceException {
-        this.inputs = inputs;
-        this.outputs = outputs;
-        this.scanResult = scanResult;
-        this.configuration = configuration;
+    Persister(Pipeline[] pipelines, Configuration<Object, Object> configuration) {
+        this.pipelines = pipelines;
 
-        data = scanResult.getData();
-        sequence = scanResult.getSequence();
-        commits = scanResult.getCommits();
         finished = new CountDownLatch(1);
         started = false;
         stopped = false;
@@ -87,6 +78,8 @@ final class Persister implements Runnable {
             break;
         }
         marshallersById = localMarshallersById;
+
+        callback = configuration.getPersistCallback();
     }
 
     @Override
@@ -103,19 +96,7 @@ final class Persister implements Runnable {
         }
 
         try {
-            // prepare everything
-            initializeOutputs();
-            loadUncommitted();
-
-            // special simplified case when batch sizes are equal and only one input and only one output
-            boolean flat = inputs.length == 1 && outputs.length == 1 && configuration.getInputBatchSize() == configuration.getOutputBatchSize();
-
-            // start reading new data
-            if (flat) {
-                processOneToOne();
-            } else {
-                processManyToMany();
-            }
+            processPipelines();
         } catch (Throwable e) {
             Logger.error(e, "Error during processing of the queue");
         } finally {
@@ -149,52 +130,21 @@ final class Persister implements Runnable {
         Logger.info("Persister fully stopped");
     }
 
-    private void initializeOutputs() {
-        Logger.info("Initializing output queues");
-
-        ScanCommitElement[] scannedCommits = scanResult.getScannedCommits();
-        for (int i = 0; i < outputs.length; i++) {
-            BufferedQueueFromPersister.Tail output = outputs[i];
-            output.setData(data);
-            output.setSequence(sequence);
-            output.setCommit(commits[i]);
-            output.setSequenceId(scannedCommits[i].getSequenceId());
-        }
-
-        // initialize sequence to latest consistent element
-        sequence.setCursor(scanResult.getMaxAvailableSequnceCursor());
-    }
-
-    private void loadUncommitted() {
+    void loadUncommitted() {
         Logger.info("Loading uncommitted elements");
 
-        Object[] batch = null;
-        DataReader reader = null;
+        for (Pipeline pipeline : pipelines) {
+            Sequence sequence = pipeline.getSequence();
+            ScanResultElement initialScan = pipeline.getInitialScan();
 
-        ScanCommitElement[] scannedCommits = scanResult.getScannedCommits();
-        for (int outputIndex = 0; outputIndex < outputs.length; outputIndex++) {
             long initialSequenceCursor = sequence.getCursor();
+            if (initialScan.isUncommittedData()) {
+                Logger.warn("Found uncommitted data in queue {}", initialScan.getId());
 
-            ScanCommitElement scannedCommit = scannedCommits[outputIndex];
-            if (scannedCommit.isUncommittedData()) {
-                Logger.warn("Found uncommitted data in queue {}", outputIndex);
+                sequence.setCursor(initialScan.getMinAvailableUncommittedSequenceCursor());
 
-                if (reader == null) {
-                    reader = data.newReader();
-                }
-                if (batch == null) {
-                    batch = new Object[configuration.getOutputBatchSize()];
-                }
-
-                sequence.setCursor(scannedCommit.getMinAvailableUncommittedSequenceCursor());
-
-                int batchIndex = 0;
+                DataReader reader = pipeline.getData().newReader();
                 do {
-                    // skip elements from another output
-                    if (sequence.getOutput() != outputIndex) {
-                        continue;
-                    }
-
                     // try to fin marshaller for current element
                     int elementType = sequence.getElementType();
                     int typeHash = elementType % marshallersById.length;
@@ -218,106 +168,91 @@ final class Persister implements Runnable {
                     }
 
                     // put element to batch
-                    if (element != null) {
-                        batch[batchIndex++] = element;
-                    } else {
+                    if (element == null) {
                         Logger.error("Null unmarshalled element at {} of type {}", sequence.getElementCursor(), elementType);
+                        sequence.next();
+                        continue;
                     }
 
-                    // push unmarshalled objects to queue if batch is full
-                    if (batchIndex == batch.length) {
-                        int done = 0;
-                        int rest = batch.length;
-                        do {
-                            int size = outputs[outputIndex].add(batch, done, rest);
-                            done += size;
-                            rest += size;
-                        } while (rest > 0);
-                    }
-
+                    // push unmarshalled objects to queue
+                    pipeline.getQueueToPersister().add(element, null);
                     sequence.next();
-                } while (sequence.getId() <= scannedCommit.getMaxAvailableUncommittedSequenceId());
+                } while (sequence.getId() <= initialScan.getMaxAvailableUncommittedSequenceId());
 
-                // push rest unmarshalled objects to queue
-                if (batchIndex > 0) {
-                    outputs[outputIndex].add(batch, 0, batchIndex);
-                }
-
-                // restore sequence
+                // repair cursors
+                TailCursor tailCursor = pipeline.getTailCursor();
+                SerializerCursor serializerCursor = pipeline.getSerializerCursor();
+                serializerCursor.setCursor(tailCursor.getCursor());
+                serializerCursor.setNodeIndex(tailCursor.getNodeIndex());
+                serializerCursor.setCurrentNode(tailCursor.getCurrentNode());
+                serializerCursor.setSequenceId(sequence.getId());
                 sequence.setCursor(initialSequenceCursor);
             }
         }
+
+        MemoryFence.full();
     }
 
-    private void processOneToOne() {
-        // TODO: implement one to one persister
-        processManyToMany();
-    }
-
-    private void processManyToMany() {
+    private void processPipelines() {
         Logger.info("Processing new elements with multiple I/O");
-
-        PersistCallback<Object, Object> callback = configuration.getPersistCallback();
-
-        Data dataVar = data;
-        Sequence sequenceVar = sequence;
-        DataWriter writer = dataVar.newWriter();
-        writer.setCursor(sequenceVar.getNextElementCursor());
-        long sequenceId = scanResult.getMaxAvailableSequnceId() + 1;
 
         Marshaller<Object, Object>[] marshallers = marshallersByClass;
         int serializersSize = marshallers.length;
 
-        int batchReady = 0;
-        int inputBatchSize = configuration.getInputBatchSize();
-        int outputBatchSize = configuration.getOutputBatchSize();
-        Object[] batch = new Object[inputBatchSize];
-        int batchLeft = inputBatchSize;
-
         int inputIndex = 0;
-        Pipeline.Head[] inputsVar = inputs;
-        int inputsSize = inputsVar.length;
+        Pipeline[] pipelinesVar = pipelines;
+        int pipelinesSize = pipelinesVar.length;
 
-        int outputIndex = 0;
-        BufferedQueueFromPersister.Tail[] outputsVar = outputs;
-        int outputsSize = outputsVar.length;
+        int[] marshallerIds = marshallerIdByClass;
+        PersistCallback<Object, Object> callbackVar = callback;
 
-        int inputIndexMark = inputsSize;
+        inputLoop:
         for (; ; ) {
-            // cancel everything on deactivation
-            if (stopped) {
-                return;
-            }
+            Pipeline pipeline = pipelinesVar[inputIndex % pipelinesSize];
+            Sequence sequence = pipeline.getSequence();
+            DataWriter writer = pipeline.getWriter();
+            SerializerCursor input = pipeline.getSerializerCursor();
+            Object[] currentNodeVar = input.getCurrentNode();
+            long readIndexVar = input.getCursor();
+            long nodeIndexVar = input.getNodeIndex();
+            long sequenceId = input.getSequenceId();
 
-            // get several available objects from queue
-            Pipeline.Head input = inputsVar[inputIndex % inputsSize];
-            int count = input.get(batch, batchReady, batchLeft);
-            batchLeft -= count;
-            batchReady += count;
-
-            // if batch is not full 
-            if (batchLeft > 0) {
-                // check we pulled all inputs
-                if (inputIndex == inputIndexMark) {
-                    inputIndexMark = inputIndex + inputsSize;
-                    inputIndex++;
-
-                    // proceed with batch write only if it is not empty
-                    if (batchReady == 0) {
-                        continue;
-                    }
-                } else {
-                    // just roll over input
-                    inputIndex++;
-                    continue;
+            for (;;) {
+                // cancel everything on deactivation
+                if (stopped) {
+                    return;
                 }
-            }
 
-            // persist objects and invoke callback
-            for (int i = 0; i < batchReady; i++) {
-                int index = i << 1;
-                Object element = batch[index];
-                Object elementContext = batch[index | 1];
+                // check we need to move to another node
+                long elementNodeIndex = readIndexVar >> NodeUtil.NODE_DATA_SHIFT;
+                if (elementNodeIndex != nodeIndexVar) {
+                    // try get next node from chain
+                    Object[] nextNode = (Object[]) currentNodeVar[NodeUtil.NEXT_NODE_INDEX];
+                    if (nextNode == null) {
+                        input.setCursor(readIndexVar);
+                        input.setSequenceId(sequenceId);
+                        inputIndex++;
+                        continue inputLoop;
+                    }
+
+                    // use new node as current
+                    currentNodeVar = nextNode;
+                    input.setNodeIndex(elementNodeIndex);
+                    input.setCurrentNode(currentNodeVar);
+                }
+
+                int elementIndex = (int) (readIndexVar & NodeUtil.NODE_DATA_SIZE_MASK);
+                Object element = currentNodeVar[elementIndex];
+                if (element == null) {
+                    // another thread didn't write to the index yet
+                    input.setCursor(readIndexVar);
+                    input.setSequenceId(sequenceId);
+                    inputIndex++;
+                    continue inputLoop;
+                }
+
+                // persist object and invoke callback
+                Object elementContext = currentNodeVar[elementIndex | 1];
                 int typeHash = element.getClass().hashCode() % serializersSize;
                 Marshaller<Object, Object> marshaller = marshallers[typeHash];
 
@@ -334,60 +269,28 @@ final class Persister implements Runnable {
                 writer.mark(sequenceId);
 
                 // write to sequence file
-                sequenceVar.next();
-                sequenceVar.setId(sequenceId);
-                sequenceVar.setOutput(outputIndex);
-                sequenceVar.setElementCursor(initialDataCursor);
-                sequenceVar.setElementLength(writer.getCursor() - initialDataCursor);
-                sequenceVar.setElementType(marshallerIdByClass[typeHash]);
-                sequenceVar.commit();
+                sequence.next();
+                sequence.setId(sequenceId);
+                sequence.setElementCursor(initialDataCursor);
+                sequence.setElementLength(writer.getCursor() - initialDataCursor);
+                sequence.setElementType(marshallerIds[typeHash]);
+                sequence.commit();
                 sequenceId++;
 
                 // execute callback
-                callback.onElementPersisted(element, elementContext);
+                callbackVar.onElementPersisted(element, elementContext);
+
+                // counters for next step
+                readIndexVar += 2;
             }
-
-            // push persisted objects
-            if (batchSizeSame) {
-                // if input and output batch sizes are equal
-                outputsVar[outputIndex % outputsSize].add(batch, batchReady, batchLeft);
-                batchReady = 0;
-                outputIndex++;
-            } else {
-                // if output batch size is less then input
-                int outputBatchOffset = 0;
-                for (; ; ) {
-                    if (batchReady > outputBatchSize) {
-                        batchReady -= outputBatchSize;
-                        outputsVar[outputIndex % outputsSize].add(batch, outputBatchOffset, outputBatchSize);
-                        outputBatchOffset += outputBatchSize;
-                    } else {
-                        outputsVar[outputIndex % outputsSize].add(batch, outputBatchOffset, batchReady);
-                        batchReady = 0;
-                        break;
-                    }
-
-                    outputIndex++;
-                }
-            }
-
-            // retrigger buffer
-            batchLeft = inputBatchSize;
         }
     }
 
     private void closeFiles() {
-        if (data != null) {
-            data.close();
-        }
-
-        if (sequence != null) {
-            sequence.close();
-        }
-
-        if (commits != null) {
-            Stream.of(commits).forEach(Commit::close);
+        for (Pipeline pipeline : pipelines) {
+            pipeline.getData().close();
+            pipeline.getSequence().close();
+            pipeline.getCommit().close();
         }
     }
-
 }

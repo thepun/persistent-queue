@@ -7,6 +7,10 @@ final class SerializerCursor {
 
     private final TailCursor tailCursor;
 
+    private Data data;
+    private Sequence sequence;
+    private long sequenceId;
+
     private long cursor;
     private long nodeIndex;
     private Object[] currentNode;
@@ -43,58 +47,27 @@ final class SerializerCursor {
         this.currentNode = currentNode;
     }
 
-    /*int get(Object[] buffer, int offset, int length) {
-        Object[] currentNodeVar = currentNode;
-        long readIndexVar = cursor;
-        long nodeIndexVar = nodeIndex;
+    Data getData() {
+        return data;
+    }
 
-        int count = 0;
-        int bufferIndex = offset;
-        do {
-            // check we need to move to another node
-            long elementNodeIndex = readIndexVar >> NODE_DATA_SHIFT;
-            if (elementNodeIndex != nodeIndexVar) {
-                // try get next node from chain
-                Object[] nextNode = (Object[]) currentNodeVar[NEXT_NODE_INDEX];
-                if (nextNode == null) {
-                    cursor = readIndexVar;
-                    return count;
-                }
+    void setData(Data data) {
+        this.data = data;
+    }
 
-                // free processed node
-                currentNodeVar[NEXT_FREE_NODE_INDEX] = freeNode;
-                ((Generation) currentNodeVar[NODE_GENERATION_INDEX]).increment();
+    Sequence getSequence() {
+        return sequence;
+    }
 
-                // ensure we expose free node only after it is prepared
-                MemoryFence.store();
+    void setSequence(Sequence sequence) {
+        this.sequence = sequence;
+    }
 
-                // expose new free node
-                pipeline.externalFreeNode = currentNodeVar;
+    long getSequenceId() {
+        return sequenceId;
+    }
 
-                // use new node as current
-                currentNodeVar = nextNode;
-                nodeIndex = elementNodeIndex;
-                currentNode = currentNodeVar;
-            }
-
-            int elementIndex = (int) (readIndexVar & NODE_DATA_SIZE_MASK);
-            Object element = currentNodeVar[elementIndex];
-            if (element == null) {
-                // another thread didn't write to the index yet
-                cursor = readIndexVar;
-                return count;
-            }
-
-            buffer[bufferIndex] = element;
-            buffer[bufferIndex | 1] = currentNodeVar[elementIndex | 1];
-
-            // counters for next step
-            readIndexVar += 2;
-            bufferIndex += 2;
-            count += 1;
-        } while (count < length);
-
-        cursor = readIndexVar;
-        return count;
-    }*/
+    void setSequenceId(long sequenceId) {
+        this.sequenceId = sequenceId;
+    }
 }

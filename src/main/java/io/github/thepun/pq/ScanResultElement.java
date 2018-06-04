@@ -1,8 +1,8 @@
 package io.github.thepun.pq;
 
-final class ScanCommitElement {
+final class ScanResultElement {
 
-    private long id;
+    private int id;
     private long sequenceId;
     private long sequenceCursor;
     private long firstUncommittedSequenceId;
@@ -12,93 +12,112 @@ final class ScanCommitElement {
     private long maxAvailableUncommittedSequenceId;
     private long maxAvailableUncommittedSequenceCursor;
     private boolean uncommittedData;
-    private Commit commit;
 
-    public long getId() {
+    private Data data;
+    private Commit commit;
+    private Sequence sequence;
+
+    int getId() {
         return id;
     }
 
-    public void setId(long id) {
+    void setId(int id) {
         this.id = id;
     }
 
-    public long getSequenceId() {
+    long getSequenceId() {
         return sequenceId;
     }
 
-    public void setSequenceId(long sequenceId) {
+    void setSequenceId(long sequenceId) {
         this.sequenceId = sequenceId;
     }
 
-    public long getSequenceCursor() {
+    long getSequenceCursor() {
         return sequenceCursor;
     }
 
-    public void setSequenceCursor(long sequenceCursor) {
+    void setSequenceCursor(long sequenceCursor) {
         this.sequenceCursor = sequenceCursor;
     }
 
-    public long getFirstUncommittedSequenceId() {
+    long getFirstUncommittedSequenceId() {
         return firstUncommittedSequenceId;
     }
 
-    public void setFirstUncommittedSequenceId(long firstUncommittedSequenceId) {
+    void setFirstUncommittedSequenceId(long firstUncommittedSequenceId) {
         this.firstUncommittedSequenceId = firstUncommittedSequenceId;
     }
 
-    public long getFirstUncommittedSequenceCursor() {
+    long getFirstUncommittedSequenceCursor() {
         return firstUncommittedSequenceCursor;
     }
 
-    public void setFirstUncommittedSequenceCursor(long firstUncommittedSequenceCursor) {
+    void setFirstUncommittedSequenceCursor(long firstUncommittedSequenceCursor) {
         this.firstUncommittedSequenceCursor = firstUncommittedSequenceCursor;
     }
 
-    public boolean isUncommittedData() {
+    boolean isUncommittedData() {
         return uncommittedData;
     }
 
-    public void setUncommittedData(boolean uncommittedData) {
+    void setUncommittedData(boolean uncommittedData) {
         this.uncommittedData = uncommittedData;
     }
 
-    public Commit getCommit() {
+    Commit getCommit() {
         return commit;
     }
 
-    public void setCommit(Commit commit) {
+    void setCommit(Commit commit) {
         this.commit = commit;
     }
 
-    public long getMinAvailableUncommittedSequenceId() {
+    long getMinAvailableUncommittedSequenceId() {
         return minAvailableUncommittedSequenceId;
     }
 
-    public void setMinAvailableUncommittedSequenceId(long minAvailableUncommittedSequenceId) {
+    void setMinAvailableUncommittedSequenceId(long minAvailableUncommittedSequenceId) {
         this.minAvailableUncommittedSequenceId = minAvailableUncommittedSequenceId;
     }
 
-    public long getMinAvailableUncommittedSequenceCursor() {
+    long getMinAvailableUncommittedSequenceCursor() {
         return minAvailableUncommittedSequenceCursor;
     }
 
-    public void setMinAvailableUncommittedSequenceCursor(long minAvailableUncommittedSequenceCursor) {
+    void setMinAvailableUncommittedSequenceCursor(long minAvailableUncommittedSequenceCursor) {
         this.minAvailableUncommittedSequenceCursor = minAvailableUncommittedSequenceCursor;
     }
 
-    public long getMaxAvailableUncommittedSequenceId() {
+    long getMaxAvailableUncommittedSequenceId() {
         return maxAvailableUncommittedSequenceId;
     }
 
-    public void setMaxAvailableUncommittedSequenceId(long maxAvailableUncommittedSequenceId) {
+    void setMaxAvailableUncommittedSequenceId(long maxAvailableUncommittedSequenceId) {
         this.maxAvailableUncommittedSequenceId = maxAvailableUncommittedSequenceId;
     }
 
-    public long getMaxAvailableUncommittedSequenceCursor() {
+    long getMaxAvailableUncommittedSequenceCursor() {
         return maxAvailableUncommittedSequenceCursor;
     }
 
-    public void setMaxAvailableUncommittedSequenceCursor(long maxAvailableUncommittedSequenceCursor) {
+    void setMaxAvailableUncommittedSequenceCursor(long maxAvailableUncommittedSequenceCursor) {
         this.maxAvailableUncommittedSequenceCursor = maxAvailableUncommittedSequenceCursor;
+    }
+
+    Data getData() {
+        return data;
+    }
+
+    void setData(Data data) {
+        this.data = data;
+    }
+
+    Sequence getSequence() {
+        return sequence;
+    }
+
+    void setSequence(Sequence sequence) {
+        this.sequence = sequence;
     }
 }
