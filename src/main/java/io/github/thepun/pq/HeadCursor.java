@@ -1,22 +1,26 @@
 package io.github.thepun.pq;
 
-import sun.misc.Contended;
-
-@Contended
-final class SerializerCursor {
+final class HeadCursor {
 
     private final TailCursor tailCursor;
+    private final SerializerCursor serializerCursor;
 
     private long cursor;
     private long nodeIndex;
+    private Object[] freeNode;
     private Object[] currentNode;
 
-    SerializerCursor(TailCursor tailCursor) {
+    HeadCursor(TailCursor tailCursor, SerializerCursor serializerCursor) {
         this.tailCursor = tailCursor;
+        this.serializerCursor = serializerCursor;
     }
 
     TailCursor getTailCursor() {
         return tailCursor;
+    }
+
+    SerializerCursor getSerializerCursor() {
+        return serializerCursor;
     }
 
     long getCursor() {
@@ -33,6 +37,14 @@ final class SerializerCursor {
 
     void setNodeIndex(long nodeIndex) {
         this.nodeIndex = nodeIndex;
+    }
+
+    Object[] getFreeNode() {
+        return freeNode;
+    }
+
+    void setFreeNode(Object[] freeNode) {
+        this.freeNode = freeNode;
     }
 
     Object[] getCurrentNode() {
