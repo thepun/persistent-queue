@@ -30,7 +30,7 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
             MemoryFence.store();
 
             // attach new node to chain
-            currentNodeVar[NodeUtil.NEXT_NODE_INDEX] = newNode;
+            NodeUtil.setNextNode(currentNodeVar, newNode);
         }
 
         tailCursorVar.setCursor(writerIndexVar + 2);
@@ -46,19 +46,19 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
 
         // we dont have any local node to use
         if (localFreeNodeVar != null) {
-            Object[] nextNode = (Object[]) localFreeNodeVar[NodeUtil.NEXT_FREE_NODE_INDEX];
+            Object[] nextNode = NodeUtil.getNextFreeNode(localFreeNodeVar);
             if (nextNode != null) {
                 // check if we found previous external node with the same generation
                 Object[] previousExternalFreeNodeVar = tailCursor.getPreviousExternalFreeNode();
                 if (nextNode == previousExternalFreeNodeVar) {
-                    int gen = ((Generation) previousExternalFreeNodeVar[NodeUtil.NODE_GENERATION_INDEX]).getValue();
+                    int gen = NodeUtil.currentGeneration(previousExternalFreeNodeVar);
                     if (gen == tailCursor.getPreviousExternalFreeNodeGen()) {
                         nextNode = null;
                     }
                 }
             }
 
-            localFreeNodeVar[NodeUtil.NEXT_FREE_NODE_INDEX] = null;
+            NodeUtil.setNextFreeNode(localFreeNodeVar, null);
             tailCursor.setLocalFreeNode(nextNode);
             return localFreeNodeVar;
         }
@@ -73,7 +73,7 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         // if external free node is still not changed we assume that there are not enough nodes and we have to create new
         int currentExternalFreeNodeGenVar = tailCursor.getCurrentExternalFreeNodeGen();
         Object[] currentExternalFreeNodeVar = tailCursor.getCurrentExternalFreeNode();
-        int gen = ((Generation) externalFreeNodeVar[NodeUtil.NODE_GENERATION_INDEX]).getValue();
+        int gen = NodeUtil.currentGeneration(externalFreeNodeVar);
         if (externalFreeNodeVar == currentExternalFreeNodeVar && gen == currentExternalFreeNodeGenVar) {
             return NodeUtil.createNewNode();
         }
@@ -84,8 +84,8 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         tailCursor.setCurrentExternalFreeNodeGen(gen);
         tailCursor.setCurrentExternalFreeNode(externalFreeNodeVar);
 
-        Object[] nextNode = (Object[]) externalFreeNodeVar[NodeUtil.NEXT_FREE_NODE_INDEX];
-        externalFreeNodeVar[NodeUtil.NEXT_FREE_NODE_INDEX] = null;
+        Object[] nextNode = NodeUtil.getNextFreeNode(externalFreeNodeVar);
+        NodeUtil.setNextFreeNode(externalFreeNodeVar, null);
         tailCursor.setLocalFreeNode(nextNode);
         return externalFreeNodeVar;
     }

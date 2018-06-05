@@ -157,7 +157,7 @@ final class Persister implements Runnable {
 
                     // read element from data file
                     reader.setCursor(sequence.getElementCursor());
-                    reader.setLimit(sequence.getElementLength());
+                    reader.setLimit(sequence.getElementCursor() + sequence.getElementLength());
                     Object element;
                     try {
                         element = marshaller.deserialize(reader);
@@ -228,7 +228,7 @@ final class Persister implements Runnable {
                 long elementNodeIndex = readIndexVar >> NodeUtil.NODE_DATA_SHIFT;
                 if (elementNodeIndex != nodeIndexVar) {
                     // try get next node from chain
-                    Object[] nextNode = (Object[]) currentNodeVar[NodeUtil.NEXT_NODE_INDEX];
+                    Object[] nextNode = NodeUtil.getNextNode(currentNodeVar);
                     if (nextNode == null) {
                         input.setCursor(readIndexVar);
                         input.setNextSequenceId(nextSequenceId);

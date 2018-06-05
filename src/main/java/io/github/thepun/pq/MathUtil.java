@@ -10,7 +10,7 @@ final class MathUtil {
         return value;
     }
 
-    static boolean isPrime(int n) {
+    private static boolean isPrime(int n) {
         if (n % 2 == 0) {
             return false;
         }

@@ -26,7 +26,7 @@ final class Pipeline {
         Object[] localFreeNode = NodeUtil.createNewNode();
         Object[] externalFreeNode = NodeUtil.createNewNode();
         Object[] previousExternalFreeNode = NodeUtil.createNewNode();
-        externalFreeNode[NodeUtil.NEXT_FREE_NODE_INDEX] = previousExternalFreeNode;
+        NodeUtil.setNextFreeNode(externalFreeNode, previousExternalFreeNode);
 
         tailCursor = new TailCursor();
         tailCursor.setCurrentNode(currentNode);

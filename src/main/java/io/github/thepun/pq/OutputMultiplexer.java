@@ -42,14 +42,14 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                 long elementNodeIndex = readIndexVar >> NodeUtil.NODE_DATA_SHIFT;
                 if (elementNodeIndex != nodeIndexVar) {
                     // try get next node from chain
-                    Object[] nextNode = (Object[]) currentNodeVar[NodeUtil.NEXT_NODE_INDEX];
+                    Object[] nextNode = NodeUtil.getNextNode(currentNodeVar);
                     if (nextNode == null) {
                         break;
                     }
 
                     // free processed node
-                    currentNodeVar[NodeUtil.NEXT_FREE_NODE_INDEX] = input.getFreeNode();
-                    ((Generation) currentNodeVar[NodeUtil.NODE_GENERATION_INDEX]).increment();
+                    NodeUtil.setNextFreeNode(currentNodeVar, input.getFreeNode());
+                    NodeUtil.incrementGeneration(currentNodeVar);
 
                     // ensure we expose free node only after it is prepared
                     MemoryFence.store();
