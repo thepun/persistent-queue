@@ -21,9 +21,9 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
 
         int batchIndex = offset;
         int batchBoundery = offset + length;
-
         do {
             HeadCursor input = inputsVar[(int) (pipelineIndexVar % pipelineSize)];
+            long lastSequenceId = input.getLastSequenceId();
 
             Object[] currentNodeVar = input.getCurrentNode();
             long nodeIndexVar = input.getNodeIndex();
@@ -44,7 +44,6 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                     // try get next node from chain
                     Object[] nextNode = (Object[]) currentNodeVar[NodeUtil.NEXT_NODE_INDEX];
                     if (nextNode == null) {
-                        input.setCursor(readIndexVar);
                         break;
                     }
 
@@ -68,7 +67,6 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                 Object element = currentNodeVar[elementIndex];
                 if (element == null) {
                     // another thread didn't write to the index yet
-                    input.setCursor(readIndexVar);
                     break;
                 }
 
@@ -76,16 +74,20 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                 batch[batchIndex] = element;
 
                 // counters for next step
+                lastSequenceId += 1;
                 readIndexVar += 2;
                 batchIndex += 1;
-                input.setCursor(readIndexVar);
 
                 // check we have space in batch
                 if (batchIndex == batchBoundery) {
+                    input.setLastSequenceId(lastSequenceId);
+                    input.setCursor(readIndexVar);
                     return length;
                 }
             }
 
+            input.setLastSequenceId(lastSequenceId);
+            input.setCursor(readIndexVar);
             pipelineIndex++;
         } while (pipelineIndex != maxPipelineIndex);
 
@@ -105,61 +107,19 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
 
     @Override
     public void commit() {
+        HeadCursor[] inputsVar = inputs;
+        int pipelineSize = inputsVar.length;
 
+        for (int i = 0; i < pipelineSize; i++) {
+            HeadCursor input = inputsVar[i];
+
+            // sync data
+            input.getData().sync();
+
+            // sync sequence
+            Sequence sequence = input.getSequence();
+            sequence.markLastCommitted(input.getLastSequenceId());
+            sequence.sync();
+        }
     }
-
-    /*int get(Object[] buffer, int offset, int length) {
-        Object[] currentNodeVar = currentNode;
-        long readIndexVar = cursor;
-        long nodeIndexVar = nodeIndex;
-
-        int count = 0;
-        int bufferIndex = offset;
-        do {
-            // check we need to move to another node
-            long elementNodeIndex = readIndexVar >> NODE_DATA_SHIFT;
-            if (elementNodeIndex != nodeIndexVar) {
-                // try get next node from chain
-                Object[] nextNode = (Object[]) currentNodeVar[NEXT_NODE_INDEX];
-                if (nextNode == null) {
-                    cursor = readIndexVar;
-                    return count;
-                }
-
-                // free processed node
-                currentNodeVar[NEXT_FREE_NODE_INDEX] = freeNode;
-                ((Generation) currentNodeVar[NODE_GENERATION_INDEX]).increment();
-
-                // ensure we expose free node only after it is prepared
-                MemoryFence.store();
-
-                // expose new free node
-                pipeline.externalFreeNode = currentNodeVar;
-
-                // use new node as current
-                currentNodeVar = nextNode;
-                nodeIndex = elementNodeIndex;
-                currentNode = currentNodeVar;
-            }
-
-            int elementIndex = (int) (readIndexVar & NODE_DATA_SIZE_MASK);
-            Object element = currentNodeVar[elementIndex];
-            if (element == null) {
-                // another thread didn't write to the index yet
-                cursor = readIndexVar;
-                return count;
-            }
-
-            buffer[bufferIndex] = element;
-            buffer[bufferIndex | 1] = currentNodeVar[elementIndex | 1];
-
-            // counters for next step
-            readIndexVar += 2;
-            bufferIndex += 2;
-            count += 1;
-        } while (count < length);
-
-        cursor = readIndexVar;
-        return count;
-    }*/
 }

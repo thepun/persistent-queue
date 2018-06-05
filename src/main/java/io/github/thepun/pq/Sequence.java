@@ -36,6 +36,10 @@ final class Sequence {
 
     }
 
+    long getCommitId() {
+
+    }
+
     void setId(long id) {
 
     }
@@ -85,7 +89,19 @@ final class Sequence {
 
     }
 
-    void commit() {
+    void prev() {
+
+    }
+
+    void commit(long sequenceId) {
+
+    }
+
+    long lastCommitted() {
+
+    }
+
+    void markLastCommitted(long sequenceId) {
 
     }
 

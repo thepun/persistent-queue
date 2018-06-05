@@ -9,9 +9,8 @@ final class HeadCursor {
     private final SerializerCursor serializerCursor;
 
     private Data data;
-    private Commit commit;
     private Sequence sequence;
-    private long sequenceId;
+    private long lastSequenceId;
 
     private long cursor;
     private long nodeIndex;
@@ -72,14 +71,6 @@ final class HeadCursor {
         this.data = data;
     }
 
-    Commit getCommit() {
-        return commit;
-    }
-
-    void setCommit(Commit commit) {
-        this.commit = commit;
-    }
-
     Sequence getSequence() {
         return sequence;
     }
@@ -88,11 +79,11 @@ final class HeadCursor {
         this.sequence = sequence;
     }
 
-    long getSequenceId() {
-        return sequenceId;
+    long getLastSequenceId() {
+        return lastSequenceId;
     }
 
-    void setSequenceId(long sequenceId) {
-        this.sequenceId = sequenceId;
+    void setLastSequenceId(long lastSequenceId) {
+        this.lastSequenceId = lastSequenceId;
     }
 }

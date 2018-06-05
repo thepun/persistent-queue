@@ -13,11 +13,11 @@ final class Data {
         buffer = helper.getBuffer();
     }
 
-    DataWriter newWriter() {
+    long getSequenceId(long cursor) {
 
     }
 
-    DataReader newReader() {
+    long getCommitSequenceId(long cursor, long length) {
 
     }
 

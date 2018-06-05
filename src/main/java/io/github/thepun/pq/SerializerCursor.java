@@ -9,7 +9,7 @@ final class SerializerCursor {
 
     private Data data;
     private Sequence sequence;
-    private long sequenceId;
+    private long nextSequenceId;
 
     private long cursor;
     private long nodeIndex;
@@ -63,11 +63,11 @@ final class SerializerCursor {
         this.sequence = sequence;
     }
 
-    long getSequenceId() {
-        return sequenceId;
+    long getNextSequenceId() {
+        return nextSequenceId;
     }
 
-    void setSequenceId(long sequenceId) {
-        this.sequenceId = sequenceId;
+    void setNextSequenceId(long nextSequenceId) {
+        this.nextSequenceId = nextSequenceId;
     }
 }

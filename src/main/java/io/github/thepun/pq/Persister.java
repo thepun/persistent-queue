@@ -136,14 +136,14 @@ final class Persister implements Runnable {
         for (Pipeline pipeline : pipelines) {
             Sequence sequence = pipeline.getSequence();
             ScanResultElement initialScan = pipeline.getInitialScan();
+            SerializerCursor serializerCursor = pipeline.getSerializerCursor();
 
-            long initialSequenceCursor = sequence.getCursor();
             if (initialScan.isUncommittedData()) {
                 Logger.warn("Found uncommitted data in queue {}", initialScan.getId());
 
                 sequence.setCursor(initialScan.getMinAvailableUncommittedSequenceCursor());
 
-                DataReader reader = pipeline.getData().newReader();
+                DataReader reader = new DataReader();
                 do {
                     // try to fin marshaller for current element
                     int elementType = sequence.getElementType();
@@ -181,13 +181,14 @@ final class Persister implements Runnable {
 
                 // repair cursors
                 TailCursor tailCursor = pipeline.getTailCursor();
-                SerializerCursor serializerCursor = pipeline.getSerializerCursor();
                 serializerCursor.setCursor(tailCursor.getCursor());
                 serializerCursor.setNodeIndex(tailCursor.getNodeIndex());
                 serializerCursor.setCurrentNode(tailCursor.getCurrentNode());
-                serializerCursor.setSequenceId(sequence.getId());
-                sequence.setCursor(initialSequenceCursor);
             }
+
+            // sequence id to start
+            serializerCursor.setNextSequenceId(initialScan.getSequenceId() + 1);
+            sequence.setCursor(initialScan.getSequenceCursor());
         }
 
         MemoryFence.full();
@@ -215,7 +216,7 @@ final class Persister implements Runnable {
             Object[] currentNodeVar = input.getCurrentNode();
             long readIndexVar = input.getCursor();
             long nodeIndexVar = input.getNodeIndex();
-            long sequenceId = input.getSequenceId();
+            long nextSequenceId = input.getNextSequenceId();
 
             for (;;) {
                 // cancel everything on deactivation
@@ -230,7 +231,7 @@ final class Persister implements Runnable {
                     Object[] nextNode = (Object[]) currentNodeVar[NodeUtil.NEXT_NODE_INDEX];
                     if (nextNode == null) {
                         input.setCursor(readIndexVar);
-                        input.setSequenceId(sequenceId);
+                        input.setNextSequenceId(nextSequenceId);
                         inputIndex++;
                         continue inputLoop;
                     }
@@ -246,7 +247,7 @@ final class Persister implements Runnable {
                 if (element == null) {
                     // another thread didn't write to the index yet
                     input.setCursor(readIndexVar);
-                    input.setSequenceId(sequenceId);
+                    input.setNextSequenceId(nextSequenceId);
                     inputIndex++;
                     continue inputLoop;
                 }
@@ -258,7 +259,7 @@ final class Persister implements Runnable {
 
                 // write to data file
                 long initialDataCursor = writer.getCursor();
-                writer.mark(sequenceId);
+                writer.mark(nextSequenceId);
                 try {
                     marshaller.serialize(writer, element, elementContext);
                 } catch (Throwable e) {
@@ -266,16 +267,16 @@ final class Persister implements Runnable {
                     writer.setCursor(initialDataCursor);
                     continue;
                 }
-                writer.mark(sequenceId);
+                writer.commit(nextSequenceId);
 
                 // write to sequence file
                 sequence.next();
-                sequence.setId(sequenceId);
+                sequence.setId(nextSequenceId);
                 sequence.setElementCursor(initialDataCursor);
                 sequence.setElementLength(writer.getCursor() - initialDataCursor);
                 sequence.setElementType(marshallerIds[typeHash]);
-                sequence.commit();
-                sequenceId++;
+                sequence.commit(nextSequenceId);
+                nextSequenceId++;
 
                 // execute callback
                 callbackVar.onElementPersisted(element, elementContext);
@@ -290,7 +291,6 @@ final class Persister implements Runnable {
         for (Pipeline pipeline : pipelines) {
             pipeline.getData().close();
             pipeline.getSequence().close();
-            pipeline.getCommit().close();
         }
     }
 }

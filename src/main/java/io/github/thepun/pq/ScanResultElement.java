@@ -5,13 +5,17 @@ final class ScanResultElement {
     private int id;
     private long sequenceId;
     private long sequenceCursor;
-    private long firstUncommittedSequenceId;
-    private long firstUncommittedSequenceCursor;
+    private long commitedSequenceId;
+    private long minAvailableSequenceId;
+    private long minAvailableSequenceCursor;
+    private long maxAvailableSequenceId;
+    private long maxAvailableSequenceCursor;
     private long minAvailableUncommittedSequenceId;
     private long minAvailableUncommittedSequenceCursor;
     private long maxAvailableUncommittedSequenceId;
     private long maxAvailableUncommittedSequenceCursor;
     private boolean uncommittedData;
+    private boolean initial;
 
     private Data data;
     private Commit commit;
@@ -41,28 +45,20 @@ final class ScanResultElement {
         this.sequenceCursor = sequenceCursor;
     }
 
-    long getFirstUncommittedSequenceId() {
-        return firstUncommittedSequenceId;
-    }
-
-    void setFirstUncommittedSequenceId(long firstUncommittedSequenceId) {
-        this.firstUncommittedSequenceId = firstUncommittedSequenceId;
-    }
-
-    long getFirstUncommittedSequenceCursor() {
-        return firstUncommittedSequenceCursor;
-    }
-
-    void setFirstUncommittedSequenceCursor(long firstUncommittedSequenceCursor) {
-        this.firstUncommittedSequenceCursor = firstUncommittedSequenceCursor;
-    }
-
     boolean isUncommittedData() {
         return uncommittedData;
     }
 
     void setUncommittedData(boolean uncommittedData) {
         this.uncommittedData = uncommittedData;
+    }
+
+    boolean isInitial() {
+        return initial;
+    }
+
+    void setInitial(boolean initial) {
+        this.initial = initial;
     }
 
     Commit getCommit() {
@@ -103,6 +99,46 @@ final class ScanResultElement {
 
     void setMaxAvailableUncommittedSequenceCursor(long maxAvailableUncommittedSequenceCursor) {
         this.maxAvailableUncommittedSequenceCursor = maxAvailableUncommittedSequenceCursor;
+    }
+
+    long getMinAvailableSequenceId() {
+        return minAvailableSequenceId;
+    }
+
+    void setMinAvailableSequenceId(long minAvailableSequenceId) {
+        this.minAvailableSequenceId = minAvailableSequenceId;
+    }
+
+    long getMinAvailableSequenceCursor() {
+        return minAvailableSequenceCursor;
+    }
+
+    void setMinAvailableSequenceCursor(long minAvailableSequenceCursor) {
+        this.minAvailableSequenceCursor = minAvailableSequenceCursor;
+    }
+
+    long getMaxAvailableSequenceId() {
+        return maxAvailableSequenceId;
+    }
+
+    void setMaxAvailableSequenceId(long maxAvailableSequenceId) {
+        this.maxAvailableSequenceId = maxAvailableSequenceId;
+    }
+
+    long getMaxAvailableSequenceCursor() {
+        return maxAvailableSequenceCursor;
+    }
+
+    void setMaxAvailableSequenceCursor(long maxAvailableSequenceCursor) {
+        this.maxAvailableSequenceCursor = maxAvailableSequenceCursor;
+    }
+
+    long getCommitedSequenceId() {
+        return commitedSequenceId;
+    }
+
+    void setCommitedSequenceId(long commitedSequenceId) {
+        this.commitedSequenceId = commitedSequenceId;
     }
 
     Data getData() {
