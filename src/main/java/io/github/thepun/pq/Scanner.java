@@ -67,7 +67,7 @@ final class Scanner {
 
     private void createFile(Path path, int size) throws PersistenceException {
         try {
-            FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE_NEW);
+            FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE);
             fileChannel.position(size - 1);
             fileChannel.write(ByteBuffer.allocate(1));
             fileChannel.force(true);

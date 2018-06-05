@@ -91,7 +91,7 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
             pipelineIndex++;
         } while (pipelineIndex != maxPipelineIndex);
 
-        return batchBoundery - batchIndex;
+        return batchIndex - offset;
     }
 
     // TODO: add park/unpark on wait
