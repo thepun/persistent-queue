@@ -273,7 +273,7 @@ final class Persister implements Runnable {
                 sequence.next();
                 sequence.setId(nextSequenceId);
                 sequence.setElementCursor(initialDataCursor);
-                sequence.setElementLength(writer.getCursor() - initialDataCursor);
+                sequence.setElementLength((int)(writer.getCursor() - initialDataCursor));
                 sequence.setElementType(marshallerIds[typeHash]);
                 sequence.commit(nextSequenceId);
                 nextSequenceId++;
