@@ -12,6 +12,10 @@ public final class PersistentQueue<T, C> {
     public PersistentQueue(Configuration<T, C> configuration) throws PersistenceException {
         Configuration<Object, Object> objectConfiguration = (Configuration<Object, Object>) configuration;
 
+        if ((configuration.getSequenceFileSize() - 8) % 32 != 0) {
+            throw new PersistenceException("Incorrect sequence file size: " + configuration.getSequenceFileSize() + " is not equal to X * 32 + 8");
+        }
+
         if (configuration.getHeadCount() > configuration.getTailCount()) {
             throw new PersistenceException("Incorrect head count: should be less or equals to tail count " + configuration.getTailCount());
         }

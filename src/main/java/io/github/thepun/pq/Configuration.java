@@ -8,11 +8,7 @@ public final class Configuration<T, C> {
     private int headCount;
     private int tailCount;
     private int dataFileSize;
-    private int commitFileSize;
     private int sequenceFileSize;
-    private int inputBatchSize;
-    private int outputBatchSize;
-    private int initialFreeNodes;
     private String dataPath;
     private ThreadFactory persisterThreadFactory;
     private PersistCallback<T, C> persistCallback;
@@ -58,44 +54,12 @@ public final class Configuration<T, C> {
         this.persistCallback = persistCallback;
     }
 
-    public int getInitialFreeNodes() {
-        return initialFreeNodes;
-    }
-
-    public void setInitialFreeNodes(int initialFreeNodes) {
-        this.initialFreeNodes = initialFreeNodes;
-    }
-
-    public int getInputBatchSize() {
-        return inputBatchSize;
-    }
-
-    public void setInputBatchSize(int inputBatchSize) {
-        this.inputBatchSize = inputBatchSize;
-    }
-
-    public int getOutputBatchSize() {
-        return outputBatchSize;
-    }
-
-    public void setOutputBatchSize(int outputBatchSize) {
-        this.outputBatchSize = outputBatchSize;
-    }
-
     public int getDataFileSize() {
         return dataFileSize;
     }
 
     public void setDataFileSize(int dataFileSize) {
         this.dataFileSize = dataFileSize;
-    }
-
-    public int getCommitFileSize() {
-        return commitFileSize;
-    }
-
-    public void setCommitFileSize(int commitFileSize) {
-        this.commitFileSize = commitFileSize;
     }
 
     public int getSequenceFileSize() {
