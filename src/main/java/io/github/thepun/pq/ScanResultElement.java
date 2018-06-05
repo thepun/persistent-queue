@@ -18,7 +18,6 @@ final class ScanResultElement {
     private boolean initial;
 
     private Data data;
-    private Commit commit;
     private Sequence sequence;
 
     int getId() {
@@ -59,14 +58,6 @@ final class ScanResultElement {
 
     void setInitial(boolean initial) {
         this.initial = initial;
-    }
-
-    Commit getCommit() {
-        return commit;
-    }
-
-    void setCommit(Commit commit) {
-        this.commit = commit;
     }
 
     long getMinAvailableUncommittedSequenceId() {

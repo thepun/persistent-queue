@@ -143,7 +143,7 @@ final class Persister implements Runnable {
 
                 sequence.setCursor(initialScan.getMinAvailableUncommittedSequenceCursor());
 
-                DataReader reader = new DataReader();
+                DataReader reader = new DataReader(pipeline.getData());
                 do {
                     // try to fin marshaller for current element
                     int elementType = sequence.getElementType();

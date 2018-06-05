@@ -9,33 +9,35 @@ final class DataWriter implements WriteBuffer {
     private final int size;
     private final MappedByteBuffer buffer;
 
-    private int cursor;
-    private int sizeMinusEight;
+    private long cursor;
 
-    DataWriter(MappedByteBuffer buffer) {
-        this.buffer = buffer;
-
+    DataWriter(Data data) {
+        buffer = data.getBuffer();
         size = buffer.capacity();
-        sizeMinusEight = size - 8;
+    }
+
+    @Override
+    public void writeByte(byte value) {
+
+    }
+
+    @Override
+    public void writeChar(char value) {
+
+    }
+
+    @Override
+    public void writeShort(short value) {
+
     }
 
     @Override
     public void writeInt(int value) {
-        int index = cursor % size;
-        if (index < sizeMinusEight) {
-            buffer.putInt(index, value);
-        } else {
 
-        }
     }
 
     @Override
     public void writeLong(long value) {
-
-    }
-
-    @Override
-    public void writeString(String value) {
 
     }
 
@@ -63,7 +65,7 @@ final class DataWriter implements WriteBuffer {
     }
 
     void setCursor(long cursor) {
-
+        this.cursor = cursor;
     }
 
     long getCursor() {

@@ -13,6 +13,10 @@ final class Data {
         buffer = helper.getBuffer();
     }
 
+    MappedByteBuffer getBuffer() {
+
+    }
+
     long getSequenceId(long cursor) {
 
     }

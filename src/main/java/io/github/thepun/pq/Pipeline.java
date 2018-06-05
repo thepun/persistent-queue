@@ -7,7 +7,6 @@ import sun.misc.Contended;
 final class Pipeline {
 
     private final Data data;
-    private final Commit commit;
     private final Sequence sequence;
     private final DataWriter writer;
     private final TailCursor tailCursor;
@@ -20,9 +19,8 @@ final class Pipeline {
         this.initialScan = initialScan;
 
         data = initialScan.getData();
-        commit = initialScan.getCommit();
         sequence = initialScan.getSequence();
-        writer = data.newWriter();
+        writer = new DataWriter(data);
 
         Object[] currentNode = NodeUtil.createNewNode();
         Object[] localFreeNode = NodeUtil.createNewNode();
@@ -41,6 +39,8 @@ final class Pipeline {
         serializerCursor.setCurrentNode(currentNode);
 
         headCursor = new HeadCursor(serializerCursor);
+        headCursor.setData(data);
+        headCursor.setSequence(sequence);
         headCursor.setCurrentNode(currentNode);
         headCursor.setFreeNode(externalFreeNode);
 
@@ -59,10 +59,6 @@ final class Pipeline {
 
     Data getData() {
         return data;
-    }
-
-    Commit getCommit() {
-        return commit;
     }
 
     Sequence getSequence() {

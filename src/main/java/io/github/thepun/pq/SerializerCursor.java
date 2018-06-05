@@ -7,8 +7,6 @@ final class SerializerCursor {
 
     private final TailCursor tailCursor;
 
-    private Data data;
-    private Sequence sequence;
     private long nextSequenceId;
 
     private long cursor;
@@ -45,22 +43,6 @@ final class SerializerCursor {
 
     void setCurrentNode(Object[] currentNode) {
         this.currentNode = currentNode;
-    }
-
-    Data getData() {
-        return data;
-    }
-
-    void setData(Data data) {
-        this.data = data;
-    }
-
-    Sequence getSequence() {
-        return sequence;
-    }
-
-    void setSequence(Sequence sequence) {
-        this.sequence = sequence;
     }
 
     long getNextSequenceId() {
