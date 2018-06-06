@@ -1,5 +1,7 @@
 package io.github.thepun.pq;
 
+import io.github.thepun.unsafe.MemoryFence;
+
 import java.util.stream.Stream;
 
 public final class PersistentQueue<T, C> {
@@ -54,6 +56,12 @@ public final class PersistentQueue<T, C> {
         // persister
         persister = new Persister(pipelines, objectConfiguration);
         thread = configuration.getPersisterThreadFactory().newThread(persister);
+
+        // load uncommited data
+        persister.loadUncommitted();
+
+        // ensure memory is up to date
+        MemoryFence.full();
     }
 
     public PersistentQueueHead<T> getHead(int index) {
@@ -73,7 +81,6 @@ public final class PersistentQueue<T, C> {
     }
 
     public void start() {
-        persister.loadUncommitted();
         thread.start();
     }
 

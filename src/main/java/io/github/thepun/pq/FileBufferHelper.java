@@ -28,7 +28,7 @@ final class FileBufferHelper {
         }
 
         try {
-            buffer = file.map(FileChannel.MapMode.PRIVATE, 0, size);
+            buffer = file.map(FileChannel.MapMode.READ_WRITE, 0, size);
         } catch (IOException e) {
             throw new PersistenceException("Failed to map file to memory: " + size, e);
         }

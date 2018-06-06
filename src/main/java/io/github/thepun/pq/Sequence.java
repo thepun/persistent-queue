@@ -13,6 +13,7 @@ final class Sequence {
     private static final int SEQUENCE_COMMIT_OFFSET = 24;
 
 
+    private final long seqSize;
     private final FileBufferHelper helper;
     private final MappedByteBuffer buffer;
 
@@ -22,6 +23,8 @@ final class Sequence {
         this.helper = helper;
 
         buffer = helper.getBuffer();
+        seqSize = buffer.capacity() - SEQUENCE_OFFSET;
+        cursor = SEQUENCE_OFFSET;
     }
 
     long getCursor() {
@@ -33,39 +36,39 @@ final class Sequence {
     }
 
     long getCommitId() {
-        return buffer.getLong((int) (cursor + SEQUENCE_COMMIT_OFFSET));
+        return buffer.getLong(align(cursor) + SEQUENCE_COMMIT_OFFSET);
     }
 
     long getId() {
-        return buffer.getLong((int) (cursor + SEQUENCE_ID_OFFSET));
+        return buffer.getLong(align(cursor) + SEQUENCE_ID_OFFSET);
     }
 
     void setId(long id) {
-        buffer.putLong((int) (cursor + SEQUENCE_ID_OFFSET), id);
+        buffer.putLong(align(cursor) + SEQUENCE_ID_OFFSET, id);
     }
 
     int getElementType() {
-        return buffer.getInt((int) (cursor + SEQUENCE_ELEMENT_TYPE_OFFSET));
+        return buffer.getInt(align(cursor) + SEQUENCE_ELEMENT_TYPE_OFFSET);
     }
 
     void setElementType(int elementType) {
-        buffer.putInt((int) (cursor + SEQUENCE_ELEMENT_TYPE_OFFSET), elementType);
+        buffer.putInt(align(cursor) + SEQUENCE_ELEMENT_TYPE_OFFSET, elementType);
     }
 
     long getElementCursor() {
-        return buffer.getLong((int) (cursor + SEQUENCE_ELEMENT_CURSOR_OFFSET));
+        return buffer.getLong(align(cursor) + SEQUENCE_ELEMENT_CURSOR_OFFSET);
     }
 
     void setElementCursor(long elementCursor) {
-        buffer.putLong((int) (cursor + SEQUENCE_ELEMENT_CURSOR_OFFSET), elementCursor);
+        buffer.putLong(align(cursor) + SEQUENCE_ELEMENT_CURSOR_OFFSET, elementCursor);
     }
 
     int getElementLength() {
-        return buffer.getInt((int) (cursor + SEQUENCE_ELEMENT_LENGTH_OFFSET));
+        return buffer.getInt(align(cursor) + SEQUENCE_ELEMENT_LENGTH_OFFSET);
     }
 
     void setElementLength(int elementLength) {
-        buffer.putInt((int) (cursor + SEQUENCE_ELEMENT_LENGTH_OFFSET), elementLength);
+        buffer.putInt(align(cursor) + SEQUENCE_ELEMENT_LENGTH_OFFSET, elementLength);
     }
 
     int getEntriesCount() {
@@ -77,11 +80,13 @@ final class Sequence {
     }
 
     void next() {
-        cursor += SEQUENCE_ITEM_SIZE;
+        long newCursor = cursor + SEQUENCE_ITEM_SIZE;
+        cursor = rotate(newCursor, seqSize);
     }
 
     void prev() {
-        cursor -= SEQUENCE_ITEM_SIZE;
+        long newCursor = cursor - SEQUENCE_ITEM_SIZE;
+        cursor = rotate(newCursor, seqSize);
     }
 
     void commit(long sequenceId) {
@@ -102,5 +107,13 @@ final class Sequence {
 
     void close() {
         helper.close();
+    }
+
+    private static long rotate(long cursor, long seqSize) {
+        return (cursor - SEQUENCE_OFFSET) % seqSize + SEQUENCE_OFFSET;
+    }
+
+    private static int align(long cursor) {
+        return (int) cursor;
     }
 }

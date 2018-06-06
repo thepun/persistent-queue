@@ -1,11 +1,15 @@
 package io.github.thepun.pq;
 
 import io.github.thepun.unsafe.MemoryFence;
+import io.github.thepun.unsafe.ObjectMemory;
 
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 final class Persister implements Runnable {
+
+    private static final long STOPPED_FIELD_OFFSET = ObjectMemory.fieldOffset(Persister.class, "stopped");
+
 
     private final Pipeline[] pipelines;
     private final CountDownLatch finished;
@@ -15,15 +19,15 @@ final class Persister implements Runnable {
     private final Marshaller<Object, Object>[] marshallersById;
     private final Marshaller<Object, Object>[] marshallersByClass;
 
-    private boolean stopped;
-    private boolean started;
+    private int stopped;
+    private int started;
 
     Persister(Pipeline[] pipelines, Configuration<Object, Object> configuration) {
         this.pipelines = pipelines;
 
         finished = new CountDownLatch(1);
-        started = false;
-        stopped = false;
+        started = 0;
+        stopped = 0;
 
         Map<Class<?>, Marshaller<?, ?>> serializersMap = configuration.getSerializers();
 
@@ -88,11 +92,11 @@ final class Persister implements Runnable {
 
         synchronized (this) {
             // run only once
-            if (started || stopped) {
+            if (started == 1 || stopped == 1) {
                 return;
             }
 
-            started = true;
+            started = 1;
         }
 
         try {
@@ -109,13 +113,13 @@ final class Persister implements Runnable {
         Logger.info("Deactivating persister");
 
         synchronized (this) {
-            if (stopped) {
+            if (stopped == 1) {
                 return;
             }
 
-            stopped = true;
+            stopped = 1;
 
-            if (!started) {
+            if (started == 0) {
                 return;
             }
         }
@@ -156,8 +160,8 @@ final class Persister implements Runnable {
                     }
 
                     // read element from data file
-                    reader.setCursor(sequence.getElementCursor());
-                    reader.setLimit(sequence.getElementCursor() + sequence.getElementLength());
+                    reader.setCursorAndSkipId(sequence.getElementCursor());
+                    reader.setLimitWithoutCommit(sequence.getElementCursor() + sequence.getElementLength());
                     Object element;
                     try {
                         element = marshaller.deserialize(reader);
@@ -177,7 +181,7 @@ final class Persister implements Runnable {
                     // push unmarshalled objects to queue
                     pipeline.getQueueToPersister().add(element, null);
                     sequence.next();
-                } while (sequence.getId() <= initialScan.getMaxAvailableUncommittedSequenceId());
+                } while (sequence.getId() > 0 && sequence.getId() <= initialScan.getMaxAvailableUncommittedSequenceId());
 
                 // repair cursors
                 TailCursor tailCursor = pipeline.getTailCursor();
@@ -190,8 +194,6 @@ final class Persister implements Runnable {
             serializerCursor.setNextSequenceId(initialScan.getSequenceId() + 1);
             sequence.setCursor(initialScan.getSequenceCursor());
         }
-
-        MemoryFence.full();
     }
 
     private void processPipelines() {
@@ -220,7 +222,8 @@ final class Persister implements Runnable {
 
             for (;;) {
                 // cancel everything on deactivation
-                if (stopped) {
+                // we ensure that it will not be inlined and always requesting memory
+                if (ObjectMemory.getInt(this, STOPPED_FIELD_OFFSET) == 1) {
                     return;
                 }
 
@@ -270,12 +273,12 @@ final class Persister implements Runnable {
                 writer.commit(nextSequenceId);
 
                 // write to sequence file
-                sequence.next();
                 sequence.setId(nextSequenceId);
                 sequence.setElementCursor(initialDataCursor);
                 sequence.setElementLength((int)(writer.getCursor() - initialDataCursor));
                 sequence.setElementType(marshallerIds[typeHash]);
                 sequence.commit(nextSequenceId);
+                sequence.next();
                 nextSequenceId++;
 
                 // execute callback

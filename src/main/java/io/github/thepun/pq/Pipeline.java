@@ -21,6 +21,7 @@ final class Pipeline {
         data = initialScan.getData();
         sequence = initialScan.getSequence();
         writer = new DataWriter(data);
+        writer.setCursor(initialScan.getDataCursor());
 
         Object[] currentNode = NodeUtil.createNewNode();
         Object[] localFreeNode = NodeUtil.createNewNode();

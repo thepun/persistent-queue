@@ -3,6 +3,7 @@ package io.github.thepun.pq;
 final class ScanResultElement {
 
     private int id;
+    private long dataCursor;
     private long sequenceId;
     private long sequenceCursor;
     private long commitedSequenceId;
@@ -26,6 +27,14 @@ final class ScanResultElement {
 
     void setId(int id) {
         this.id = id;
+    }
+
+    public long getDataCursor() {
+        return dataCursor;
+    }
+
+    public void setDataCursor(long dataCursor) {
+        this.dataCursor = dataCursor;
     }
 
     long getSequenceId() {

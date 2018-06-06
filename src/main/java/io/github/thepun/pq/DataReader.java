@@ -100,11 +100,11 @@ final class DataReader implements ReadBuffer {
         readOffHeap(offHeapCharSequence.getOffheapAddress(), offHeapCharSequence.getOffheapLength());
     }
 
-    void setCursor(long cursor) {
-        this.cursor = cursor;
+    void setCursorAndSkipId(long cursor) {
+        this.cursor = cursor + 8;
     }
 
-    void setLimit(long limit) {
-        this.limit = limit;
+    void setLimitWithoutCommit(long limit) {
+        this.limit = limit - 8;
     }
 }

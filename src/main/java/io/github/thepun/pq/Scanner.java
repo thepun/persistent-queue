@@ -36,6 +36,8 @@ final class Scanner {
     private ScanResultElement initialElement(Path rootPath, int inputIndex) throws PersistenceException {
         ScanResultElement element = new ScanResultElement();
         element.setInitial(true);
+        element.setSequenceId(0);
+        element.setCommitedSequenceId(0);
         element.setUncommittedData(false);
         element.setMinAvailableUncommittedSequenceId(0);
         element.setMinAvailableUncommittedSequenceCursor(-1);
@@ -43,7 +45,7 @@ final class Scanner {
         element.setMaxAvailableUncommittedSequenceCursor(-1);
 
         // sequence file
-        Path sequencePath = rootPath.resolveSibling("sequence_" + inputIndex);
+        Path sequencePath = rootPath.resolve("sequence_" + inputIndex);
         if (Files.exists(sequencePath)) {
             throw new PersistenceException("File " + sequencePath + " already exists");
         }
@@ -51,9 +53,10 @@ final class Scanner {
         FileBufferHelper sequenceBufferHelper = new FileBufferHelper(sequencePath, configuration.getSequenceFileSize());
         Sequence sequence = new Sequence(sequenceBufferHelper);
         element.setSequence(sequence);
+        element.setSequenceCursor(sequence.getCursor());
 
         // data file
-        Path dataPath = rootPath.resolveSibling("data_" + inputIndex);
+        Path dataPath = rootPath.resolve("data_" + inputIndex);
         if (Files.exists(dataPath)) {
             throw new PersistenceException("File " + dataPath + " already exists");
         }
@@ -61,6 +64,7 @@ final class Scanner {
         FileBufferHelper dataBufferHelper = new FileBufferHelper(dataPath, configuration.getDataFileSize());
         Data data = new Data(dataBufferHelper);
         element.setData(data);
+        element.setDataCursor(0);
 
         return element;
     }
@@ -87,7 +91,7 @@ final class Scanner {
         element.setMaxAvailableUncommittedSequenceCursor(-1);
 
         // sequence file
-        Path sequencePath = rootPath.resolveSibling("sequence_" + inputIndex);
+        Path sequencePath = rootPath.resolve("sequence_" + inputIndex);
         if (!Files.exists(sequencePath)) {
             Logger.warn("Sequence file {} was not found", sequencePath);
             return initialElement(rootPath, inputIndex);
@@ -97,7 +101,7 @@ final class Scanner {
         element.setSequence(sequence);
 
         // data file
-        Path dataPath = rootPath.resolveSibling("data_" + inputIndex);
+        Path dataPath = rootPath.resolve("data_" + inputIndex);
         if (!Files.exists(dataPath)) {
             Logger.warn("Data file {} was not found", sequencePath);
             return initialElement(rootPath, inputIndex);
@@ -105,8 +109,6 @@ final class Scanner {
         FileBufferHelper dataBufferHelper = new FileBufferHelper(dataPath, configuration.getDataFileSize());
         Data data = new Data(dataBufferHelper);
         element.setData(data);
-
-        // sequence file
 
         // max id
         long maxSequenceCursor = findMaxSequence(sequence, data);
@@ -117,6 +119,7 @@ final class Scanner {
         long maxSequenceId = sequence.getId();
         element.setMaxAvailableSequenceId(maxSequenceId);
         element.setMaxAvailableSequenceCursor(maxSequenceCursor);
+        element.setDataCursor(sequence.getElementCursor() + sequence.getElementLength());
 
         // min id
         long minSequenceCursor = findMinSequenceBack(sequence, data);
@@ -127,25 +130,23 @@ final class Scanner {
 
         // committed
         long committedSequenceId = sequence.lastCommitted();
-        if (committedSequenceId != 0) {
-            if (committedSequenceId < maxSequenceId) {
-                element.setUncommittedData(true);
-                element.setMaxAvailableUncommittedSequenceId(maxSequenceId);
-                element.setMaxAvailableUncommittedSequenceCursor(maxSequenceCursor);
-                if (committedSequenceId + 1 >= minSequenceId) {
-                    element.setCommitedSequenceId(committedSequenceId);
-                    element.setMinAvailableUncommittedSequenceId(committedSequenceId + 1);
-                    element.setMinAvailableUncommittedSequenceCursor(findCursor(sequence, committedSequenceId + 1));
-                } else {
-                    element.setCommitedSequenceId(minSequenceId);
-                    element.setMinAvailableUncommittedSequenceId(minSequenceId);
-                    element.setMinAvailableUncommittedSequenceCursor(minSequenceCursor);
-                    Logger.warn("Committed sequence id is less then min available");
-                }
+        if (committedSequenceId < maxSequenceId) {
+            element.setUncommittedData(true);
+            element.setMaxAvailableUncommittedSequenceId(maxSequenceId);
+            element.setMaxAvailableUncommittedSequenceCursor(maxSequenceCursor);
+            if (committedSequenceId + 1 >= minSequenceId) {
+                element.setCommitedSequenceId(committedSequenceId);
+                element.setMinAvailableUncommittedSequenceId(committedSequenceId + 1);
+                element.setMinAvailableUncommittedSequenceCursor(findCursor(sequence, committedSequenceId + 1));
             } else {
-                element.setCommitedSequenceId(maxSequenceId);
-                Logger.warn("Committed sequence id is greater then max available");
+                element.setCommitedSequenceId(minSequenceId);
+                element.setMinAvailableUncommittedSequenceId(minSequenceId);
+                element.setMinAvailableUncommittedSequenceCursor(minSequenceCursor);
+                Logger.warn("Committed sequence id is less then min available");
             }
+        } else {
+            element.setCommitedSequenceId(maxSequenceId);
+            Logger.warn("Committed sequence id is greater then max available");
         }
 
         return element;
@@ -172,11 +173,15 @@ final class Scanner {
 
     private long findMaxSequence(Sequence sequence, Data data) {
         long maxId = 0;
-        long maxSequenceCursor = 0;
+        long maxSequenceCursor = -1;
 
         sequence.initial();
         for (int i = 0; i < sequence.getEntriesCount(); i ++) {
             long currentId = sequence.getId();
+            if (currentId <= 0) {
+                continue;
+            }
+
             long currentCommitId = sequence.getCommitId();
             if (currentId != currentCommitId) {
                 continue;
@@ -203,6 +208,10 @@ final class Scanner {
 
         for (int i = 0; i < sequence.getEntriesCount(); i ++) {
             long currentId = sequence.getId();
+            if (currentId <= 0) {
+                break;
+            }
+
             long currentCommitId = sequence.getCommitId();
             if (currentId == currentCommitId) {
                 break;

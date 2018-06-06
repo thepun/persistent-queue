@@ -52,6 +52,29 @@ class PersistentQueueTest {
         persistentQueue.stop();
     }
 
+    @Test
+    void pushAndPullAfterRestart() throws PersistenceException, InterruptedException {
+        configuration.getSerializers().put(Integer.class, new IntMarshaler());
+
+        PersistentQueue<Object, Object> persistentQueue = new PersistentQueue<>(configuration);
+        persistentQueue.start();
+
+        // push
+        persistentQueue.getTail(0).add(123, null);
+        Thread.sleep(1000);
+
+        // restart
+        persistentQueue.stop();
+        persistentQueue = new PersistentQueue<>(configuration);
+        persistentQueue.start();
+
+        // pull
+        Object[] batch = new Object[1];
+        int result = persistentQueue.getHead(0).getOrWait(batch, 0, 1);
+        assertEquals(1, result);
+        assertEquals(123, batch[0]);
+    }
+
 
     private class IntMarshaler implements Marshaller<Object, Object> {
 
