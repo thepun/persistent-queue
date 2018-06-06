@@ -1,6 +1,5 @@
 package io.github.thepun.pq;
 
-import io.github.thepun.unsafe.MemoryFence;
 import io.github.thepun.unsafe.ObjectMemory;
 
 import java.util.Map;

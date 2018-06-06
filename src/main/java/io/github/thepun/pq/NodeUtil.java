@@ -1,5 +1,6 @@
 package io.github.thepun.pq;
 
+// TODO: think about false sharing
 final class NodeUtil {
 
     private static final int NODE_SIZE = 18;
