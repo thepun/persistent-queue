@@ -1,5 +1,6 @@
 package io.github.thepun.pq;
 
+import io.github.thepun.unsafe.MemoryFence;
 import io.github.thepun.unsafe.ObjectMemory;
 
 import java.util.Map;
@@ -201,7 +202,7 @@ final class Persister implements Runnable {
         Marshaller<Object, Object>[] marshallers = marshallersByClass;
         int serializersSize = marshallers.length;
 
-        int inputIndex = 0;
+        long inputIndex = 0;
         Pipeline[] pipelinesVar = pipelines;
         int pipelinesSize = pipelinesVar.length;
 
@@ -210,7 +211,7 @@ final class Persister implements Runnable {
 
         inputLoop:
         for (; ; ) {
-            Pipeline pipeline = pipelinesVar[inputIndex % pipelinesSize];
+            Pipeline pipeline = pipelinesVar[(int) (inputIndex % pipelinesSize)];
             Sequence sequence = pipeline.getSequence();
             DataWriter writer = pipeline.getWriter();
             SerializerCursor input = pipeline.getSerializerCursor();
@@ -232,14 +233,13 @@ final class Persister implements Runnable {
                     // try get next node from chain
                     Object[] nextNode = NodeUtil.getNextNode(currentNodeVar);
                     if (nextNode == null) {
-                        input.setCursor(readIndexVar);
-                        input.setNextSequenceId(nextSequenceId);
                         inputIndex++;
                         continue inputLoop;
                     }
 
                     // use new node as current
                     currentNodeVar = nextNode;
+                    nodeIndexVar = elementNodeIndex;
                     input.setNodeIndex(elementNodeIndex);
                     input.setCurrentNode(currentNodeVar);
                 }
@@ -248,8 +248,6 @@ final class Persister implements Runnable {
                 Object element = currentNodeVar[elementIndex];
                 if (element == null) {
                     // another thread didn't write to the index yet
-                    input.setCursor(readIndexVar);
-                    input.setNextSequenceId(nextSequenceId);
                     inputIndex++;
                     continue inputLoop;
                 }
@@ -278,13 +276,18 @@ final class Persister implements Runnable {
                 sequence.setElementType(marshallerIds[typeHash]);
                 sequence.commit(nextSequenceId);
                 sequence.next();
+
+                // increment sequence
                 nextSequenceId++;
+                input.setNextSequenceId(nextSequenceId);
 
                 // execute callback
                 callbackVar.onElementPersisted(element, elementContext);
 
                 // counters for next step
                 readIndexVar += 2;
+                MemoryFence.store(); // increment cursor only after all data is saved
+                input.setCursor(readIndexVar);
             }
         }
     }

@@ -53,6 +53,33 @@ class PersistentQueueTest {
     }
 
     @Test
+    void pushAndPullMillion() throws PersistenceException {
+        configuration.getSerializers().put(Integer.class, new IntMarshaler());
+
+        PersistentQueue<Object, Object> persistentQueue = new PersistentQueue<>(configuration);
+        persistentQueue.start();
+
+        // push
+        PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
+        for (int i = 0; i < 10000000; i++) {
+            tail.add(i, null);
+        }
+
+        // pull
+        Object[] batch = new Object[MathUtil.nextGreaterPrime(100)];
+        PersistentQueueHead<Object> head = persistentQueue.getHead(0);
+        int i = 0;
+        do {
+            int result = head.getOrWait(batch, 0, batch.length);
+            for (int k = 0; k < result; k++, i++) {
+                assertEquals(i, batch[k]);
+            }
+        } while (i < 10000000);
+
+        persistentQueue.stop();
+    }
+
+    @Test
     void pushAndPullAfterRestart() throws PersistenceException, InterruptedException {
         configuration.getSerializers().put(Integer.class, new IntMarshaler());
 

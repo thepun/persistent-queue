@@ -22,15 +22,16 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         if (elementNodeIndex != nodeIndexVar) {
             // get new node
             Object[] newNode = getFreeNode(tailCursorVar);
-            currentNodeVar = newNode;
             tailCursorVar.setNodeIndex(elementNodeIndex);
             tailCursorVar.setCurrentNode(newNode);
+            NodeUtil.setPrevNode(newNode, currentNodeVar);
 
             // reassure we do not expose new node before it is ready
             MemoryFence.store();
 
             // attach new node to chain
             NodeUtil.setNextNode(currentNodeVar, newNode);
+            currentNodeVar = newNode;
         }
 
         tailCursorVar.setCursor(writerIndexVar + 2);

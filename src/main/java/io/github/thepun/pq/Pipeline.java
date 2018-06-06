@@ -23,7 +23,9 @@ final class Pipeline {
         writer = new DataWriter(data);
         writer.setCursor(initialScan.getDataCursor());
 
+        Object[] previousNode = NodeUtil.createNewNode();
         Object[] currentNode = NodeUtil.createNewNode();
+        NodeUtil.setPrevNode(currentNode, previousNode);
         Object[] localFreeNode = NodeUtil.createNewNode();
         Object[] externalFreeNode = NodeUtil.createNewNode();
         Object[] previousExternalFreeNode = NodeUtil.createNewNode();
