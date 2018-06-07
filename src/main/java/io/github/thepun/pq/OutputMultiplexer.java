@@ -49,19 +49,23 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
 
                     MemoryFence.load();
 
-                    // free previous node
                     // current node should be free as previous in next freeing stage
                     // current node can be used currently so we can't clear it
-                    Object[] nextNodeToFree = Node.getPrev(currentNodeVar);
-                    Node.clear(nextNodeToFree);
-                    Node.setNextFree(nextNodeToFree, input.getFreeNode());
-                    input.setFreeNode(nextNodeToFree);
+                    Object[] nodeToFree = input.getNextNodeToFree();
+                    input.setNextNodeToFree(currentNodeVar);
 
-                    // ensure we expose free node only after it is prepared
-                    MemoryFence.store();
+                    // free previous node
+                    if (nodeToFree != null) {
+                        Node.clear(nodeToFree);
+                        Node.setNextFree(nodeToFree, input.getFreeNode());
+                        input.setFreeNode(nodeToFree);
 
-                    // expose new free node
-                    input.getTailCursor().setExternalFreeNode(nextNodeToFree);
+                        // ensure we expose free node only after it is prepared
+                        MemoryFence.store();
+
+                        // expose new free node
+                        input.getTailCursor().setExternalFreeNode(nodeToFree);
+                    }
 
                     // use new node as current
                     currentNodeVar = nextNode;
@@ -91,15 +95,17 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                 if (batchIndex == batchBoundery) {
                     input.setLastSequenceId(lastSequenceId);
                     input.setCursor(readIndexVar);
+                    pipelineIndex = pipelineIndexVar;
                     return length;
                 }
             }
 
             input.setLastSequenceId(lastSequenceId);
             input.setCursor(readIndexVar);
-            pipelineIndex++;
-        } while (pipelineIndex != maxPipelineIndex);
+            pipelineIndexVar++;
+        } while (pipelineIndexVar != maxPipelineIndex);
 
+        pipelineIndex = pipelineIndexVar;
         return batchIndex - offset;
     }
 

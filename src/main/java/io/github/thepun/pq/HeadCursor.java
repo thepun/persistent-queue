@@ -16,6 +16,7 @@ final class HeadCursor {
     private long nodeIndex;
     private Object[] freeNode;
     private Object[] currentNode;
+    private Object[] nextNodeToFree;
 
     HeadCursor(SerializerCursor serializerCursor) {
         this.serializerCursor = serializerCursor;
@@ -61,6 +62,14 @@ final class HeadCursor {
 
     void setCurrentNode(Object[] currentNode) {
         this.currentNode = currentNode;
+    }
+
+    Object[] getNextNodeToFree() {
+        return nextNodeToFree;
+    }
+
+    void setNextNodeToFree(Object[] nextNodeToFree) {
+        this.nextNodeToFree = nextNodeToFree;
     }
 
     Data getData() {

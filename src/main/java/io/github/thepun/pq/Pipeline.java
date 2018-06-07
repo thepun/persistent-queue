@@ -23,10 +23,10 @@ final class Pipeline {
         writer = new DataWriter(data);
         writer.setCursor(initialScan.getDataCursor());
 
-        Object[] previousNode = Node.createNew();
+        //Object[] previousNode = Node.createNew();
         Object[] currentNode = Node.createNew();
-        Node.setPrevNode(currentNode, previousNode);
-        Object[] localFreeNode = Node.createNew();
+        //Node.setPrev(currentNode, previousNode);
+        //Object[] localFreeNode = Node.createNew();
         Object[] externalFreeNode = Node.createNew();
         //Object[] previousExternalFreeNode = Node.createNew();
         //Node.setNextFree(externalFreeNode, previousExternalFreeNode);
@@ -34,7 +34,7 @@ final class Pipeline {
 
         tailCursor = new TailCursor();
         tailCursor.setCurrentNode(currentNode);
-        tailCursor.setLocalFreeNode(localFreeNode);
+        //tailCursor.setLocalFreeNode(localFreeNode);
         tailCursor.setExternalFreeNode(externalFreeNode);
         tailCursor.setCurrentExternalFreeNode(externalFreeNode);
         //tailCursor.setPreviousExternalFreeNode(previousExternalFreeNode);

@@ -59,13 +59,15 @@ class PersistentQueueTest {
         PersistentQueue<Object, Object> persistentQueue = new PersistentQueue<>(configuration);
         persistentQueue.start();
 
-        for (int i = 0; i < 100; i++) {
+        PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
+        PersistentQueueHead<Object> head = persistentQueue.getHead(0);
+        for (int i = 0; i < 10000; i++) {
             // push
-            persistentQueue.getTail(0).add(i, null);
+            tail.add(i, null);
 
             // pull
             Object[] batch = new Object[1];
-            int result = persistentQueue.getHead(0).getOrWait(batch, 0, 1);
+            int result = head.getOrWait(batch, 0, 1);
             assertEquals(1, result);
             assertEquals(i, batch[0]);
         }
@@ -74,7 +76,34 @@ class PersistentQueueTest {
     }
 
     @Test
-    void pushAndPullMillion() throws PersistenceException {
+    void pushBatchAndPullBatchRepeat() throws PersistenceException {
+        configuration.getSerializers().put(Integer.class, new IntMarshaler());
+
+        PersistentQueue<Object, Object> persistentQueue = new PersistentQueue<>(configuration);
+        persistentQueue.start();
+
+        PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
+        PersistentQueueHead<Object> head = persistentQueue.getHead(0);
+        for (int i = 0; i < 10000; i++) {
+            // push
+            for (int k = 0; k < 100; k++) {
+                tail.add(i * k, null);
+            }
+
+            // pull
+            Object[] batch = new Object[1];
+            for (int k = 0; k < 100; k++) {
+                int result = head.getOrWait(batch, 0, 1);
+                assertEquals(1, result);
+                assertEquals(i * k, batch[0]);
+            }
+        }
+
+        persistentQueue.stop();
+    }
+
+    @Test
+    void pushAndPullInParallel() throws PersistenceException {
         configuration.getSerializers().put(Integer.class, new IntMarshaler());
 
         PersistentQueue<Object, Object> persistentQueue = new PersistentQueue<>(configuration);
@@ -83,7 +112,7 @@ class PersistentQueueTest {
         // push
         new Thread(() -> {
             PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
-            for (int i = 0; i < 10000000; i++) {
+            for (int i = 0; i < 50000000; i++) {
                 tail.add(i, null);
             }
         }).start();
@@ -97,11 +126,9 @@ class PersistentQueueTest {
             for (int k = 0; k < result; k++, i++) {
                 assertEquals(i, batch[k]);
             }
-        } while (i < 10000000);
+        } while (i < 50000000);
 
         persistentQueue.stop();
-
-        System.out.println("Total nodes: " + Node.COUNTER);
     }
 
     @Test

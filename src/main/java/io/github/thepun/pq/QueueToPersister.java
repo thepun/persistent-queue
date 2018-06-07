@@ -25,7 +25,7 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
             tailCursorVar.setNodeIndex(elementNodeIndex);
             tailCursorVar.setCurrentNode(newNode);
             Node.setNext(newNode, null);
-            Node.setPrevNode(newNode, currentNodeVar);
+            //Node.setPrev(newNode, currentNodeVar);
 
             // reassure we do not expose new node before it is ready
             MemoryFence.store();
@@ -38,10 +38,10 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         tailCursorVar.setCursor(writerIndexVar + 2);
 
         int elementIndex = (int) (writerIndexVar & Node.NODE_DATA_SIZE_MASK);
-        Object prev = Node.getElement(currentNodeVar, elementIndex);
+        /*Object prev = Node.getElement(currentNodeVar, elementIndex);
         if (prev != null) {
             Object o = null;
-        }
+        }*/
 
         Node.setElement(currentNodeVar, elementIndex | 1, elementContext);
         MemoryFence.store();
@@ -53,36 +53,39 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
 
         // we dont have any local node to use
         if (localFreeNodeVar != null) {
-            Object[] nextNode = Node.getNextFree(localFreeNodeVar);
+            /*if (nextNode == localFreeNodeVar) {
+                Object o = null;
+            }*/
 
-            if (nextNode != null) {
-                if (nextNode == localFreeNodeVar) {
-                    Object o = null;
+            // check if we found previous external node with the same generation
+            Object[] previousExternalFreeNodeVar = tailCursor.getPreviousExternalFreeNode();
+            if (localFreeNodeVar == previousExternalFreeNodeVar) {
+                int gen = Node.currentGeneration(previousExternalFreeNodeVar);
+                if (gen == tailCursor.getPreviousExternalFreeNodeGen()) {
+                    //localFreeNodeVar = null;
+                    return getExternalFreeNode(tailCursor);
                 }
-
-                // check if we found previous external node with the same generation
-                Object[] previousExternalFreeNodeVar = tailCursor.getPreviousExternalFreeNode();
-                if (nextNode == previousExternalFreeNodeVar) {
-                    int gen = Node.currentGeneration(previousExternalFreeNodeVar);
-                    if (gen == tailCursor.getPreviousExternalFreeNodeGen()) {
-                        nextNode = null;
-                    }
-                }
-
-                Object prev = Node.getElement(localFreeNodeVar, 0);
-                if (prev != null) {
-                    Object o = null;
-                }
-
-                //Node.setNextFree(localFreeNodeVar, null);
-                tailCursor.setLocalFreeNode(nextNode);
-                return localFreeNodeVar;
             }
+
+            //Node.setNextFree(localFreeNodeVar, null);
+
+            /*Object prev = Node.getElement(localFreeNodeVar, 0);
+            if (prev != null) {
+                Object o = null;
+            }*/
+
+            Object[] nextNode = Node.getNextFree(localFreeNodeVar);
+            tailCursor.setLocalFreeNode(nextNode);
+            return localFreeNodeVar;
         }
 
         // ensure we do not load anything before we check local free nodes
         MemoryFence.load();
 
+        return getExternalFreeNode(tailCursor);
+    }
+
+    private static Object[] getExternalFreeNode(TailCursor tailCursor) {
         // externalFreeNode will be accessed from another thread so we load it only once
         Object[] externalFreeNodeVar = tailCursor.getExternalFreeNode();
         MemoryFence.load();
@@ -92,6 +95,7 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         Object[] currentExternalFreeNodeVar = tailCursor.getCurrentExternalFreeNode();
         int gen = Node.currentGeneration(externalFreeNodeVar);
         if (externalFreeNodeVar == currentExternalFreeNodeVar && gen == currentExternalFreeNodeGenVar) {
+            //tailCursor.setLocalFreeNode(null);
             return Node.createNew();
         }
 
@@ -105,10 +109,10 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         //Node.setNextFree(externalFreeNodeVar, null);
         tailCursor.setLocalFreeNode(nextNode);
 
-        Object prev = Node.getElement(externalFreeNodeVar, 0);
+        /*Object prev = Node.getElement(externalFreeNodeVar, 0);
         if (prev != null) {
             Object o = null;
-        }
+        }*/
 
         return externalFreeNodeVar;
     }
