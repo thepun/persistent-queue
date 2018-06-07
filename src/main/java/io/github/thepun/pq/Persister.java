@@ -199,6 +199,8 @@ final class Persister implements Runnable {
     private void processPipelines() {
         Logger.info("Processing new elements with multiple I/O");
 
+        Object prevElement = null;
+
         Marshaller<Object, Object>[] marshallers = marshallersByClass;
         int serializersSize = marshallers.length;
 
@@ -228,14 +230,16 @@ final class Persister implements Runnable {
                 }
 
                 // check we need to move to another node
-                long elementNodeIndex = readIndexVar >> NodeUtil.NODE_DATA_SHIFT;
+                long elementNodeIndex = readIndexVar >> Node.NODE_DATA_SHIFT;
                 if (elementNodeIndex != nodeIndexVar) {
                     // try get next node from chain
-                    Object[] nextNode = NodeUtil.getNextNode(currentNodeVar);
+                    Object[] nextNode = Node.getNext(currentNodeVar);
                     if (nextNode == null) {
                         inputIndex++;
                         continue inputLoop;
                     }
+
+                    MemoryFence.load();
 
                     // use new node as current
                     currentNodeVar = nextNode;
@@ -244,16 +248,18 @@ final class Persister implements Runnable {
                     input.setCurrentNode(currentNodeVar);
                 }
 
-                int elementIndex = (int) (readIndexVar & NodeUtil.NODE_DATA_SIZE_MASK);
-                Object element = currentNodeVar[elementIndex];
+                int elementIndex = (int) (readIndexVar & Node.NODE_DATA_SIZE_MASK);
+                Object element = Node.getElement(currentNodeVar, elementIndex);
                 if (element == null) {
                     // another thread didn't write to the index yet
                     inputIndex++;
                     continue inputLoop;
                 }
 
+                MemoryFence.load();
+
                 // persist object and invoke callback
-                Object elementContext = currentNodeVar[elementIndex | 1];
+                Object elementContext = Node.getElement(currentNodeVar, elementIndex | 1);
                 int typeHash = element.getClass().hashCode() % serializersSize;
                 Marshaller<Object, Object> marshaller = marshallers[typeHash];
 
@@ -288,6 +294,16 @@ final class Persister implements Runnable {
                 readIndexVar += 2;
                 MemoryFence.store(); // increment cursor only after all data is saved
                 input.setCursor(readIndexVar);
+
+                if (prevElement != null) {
+                    int prevValue = (Integer) prevElement;
+                    int curValue = (Integer) element;
+                    if (prevValue + 1 != curValue) {
+                        Object o = null;
+                    }
+                }
+
+                prevElement = element;
             }
         }
     }

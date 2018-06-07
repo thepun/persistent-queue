@@ -53,6 +53,27 @@ class PersistentQueueTest {
     }
 
     @Test
+    void pushAndPullRepeat() throws PersistenceException {
+        configuration.getSerializers().put(Integer.class, new IntMarshaler());
+
+        PersistentQueue<Object, Object> persistentQueue = new PersistentQueue<>(configuration);
+        persistentQueue.start();
+
+        for (int i = 0; i < 100; i++) {
+            // push
+            persistentQueue.getTail(0).add(i, null);
+
+            // pull
+            Object[] batch = new Object[1];
+            int result = persistentQueue.getHead(0).getOrWait(batch, 0, 1);
+            assertEquals(1, result);
+            assertEquals(i, batch[0]);
+        }
+
+        persistentQueue.stop();
+    }
+
+    @Test
     void pushAndPullMillion() throws PersistenceException {
         configuration.getSerializers().put(Integer.class, new IntMarshaler());
 
@@ -60,10 +81,12 @@ class PersistentQueueTest {
         persistentQueue.start();
 
         // push
-        PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
-        for (int i = 0; i < 10000000; i++) {
-            tail.add(i, null);
-        }
+        new Thread(() -> {
+            PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
+            for (int i = 0; i < 10000000; i++) {
+                tail.add(i, null);
+            }
+        }).start();
 
         // pull
         Object[] batch = new Object[MathUtil.nextGreaterPrime(100)];
@@ -77,6 +100,8 @@ class PersistentQueueTest {
         } while (i < 10000000);
 
         persistentQueue.stop();
+
+        System.out.println("Total nodes: " + Node.COUNTER);
     }
 
     @Test

@@ -23,20 +23,21 @@ final class Pipeline {
         writer = new DataWriter(data);
         writer.setCursor(initialScan.getDataCursor());
 
-        Object[] previousNode = NodeUtil.createNewNode();
-        Object[] currentNode = NodeUtil.createNewNode();
-        NodeUtil.setPrevNode(currentNode, previousNode);
-        Object[] localFreeNode = NodeUtil.createNewNode();
-        Object[] externalFreeNode = NodeUtil.createNewNode();
-        Object[] previousExternalFreeNode = NodeUtil.createNewNode();
-        NodeUtil.setNextFreeNode(externalFreeNode, previousExternalFreeNode);
+        Object[] previousNode = Node.createNew();
+        Object[] currentNode = Node.createNew();
+        Node.setPrevNode(currentNode, previousNode);
+        Object[] localFreeNode = Node.createNew();
+        Object[] externalFreeNode = Node.createNew();
+        //Object[] previousExternalFreeNode = Node.createNew();
+        //Node.setNextFree(externalFreeNode, previousExternalFreeNode);
+        //Node.setNextFree(previousExternalFreeNode, previousExternalFreeNode);
 
         tailCursor = new TailCursor();
         tailCursor.setCurrentNode(currentNode);
         tailCursor.setLocalFreeNode(localFreeNode);
         tailCursor.setExternalFreeNode(externalFreeNode);
         tailCursor.setCurrentExternalFreeNode(externalFreeNode);
-        tailCursor.setPreviousExternalFreeNode(previousExternalFreeNode);
+        //tailCursor.setPreviousExternalFreeNode(previousExternalFreeNode);
 
         serializerCursor = new SerializerCursor(tailCursor);
         serializerCursor.setCurrentNode(currentNode);

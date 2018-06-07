@@ -39,27 +39,29 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                 }
 
                 // check we need to move to another node
-                long elementNodeIndex = readIndexVar >> NodeUtil.NODE_DATA_SHIFT;
+                long elementNodeIndex = readIndexVar >> Node.NODE_DATA_SHIFT;
                 if (elementNodeIndex != nodeIndexVar) {
                     // try get next node from chain
-                    Object[] nextNode = NodeUtil.getNextNode(currentNodeVar);
+                    Object[] nextNode = Node.getNext(currentNodeVar);
                     if (nextNode == null) {
                         break;
                     }
 
+                    MemoryFence.load();
+
                     // free previous node
                     // current node should be free as previous in next freeing stage
                     // current node can be used currently so we can't clear it
-                    Object[] nextNodeToFree = NodeUtil.getPrevNode(currentNodeVar);
-                    NodeUtil.clear(nextNodeToFree);
-                    NodeUtil.setNextFreeNode(nextNodeToFree, input.getFreeNode());
-                    NodeUtil.incrementGeneration(nextNodeToFree);
+                    Object[] nextNodeToFree = Node.getPrev(currentNodeVar);
+                    Node.clear(nextNodeToFree);
+                    Node.setNextFree(nextNodeToFree, input.getFreeNode());
+                    input.setFreeNode(nextNodeToFree);
 
                     // ensure we expose free node only after it is prepared
                     MemoryFence.store();
 
                     // expose new free node
-                    input.getTailCursor().setExternalFreeNode(currentNodeVar);
+                    input.getTailCursor().setExternalFreeNode(nextNodeToFree);
 
                     // use new node as current
                     currentNodeVar = nextNode;
@@ -68,12 +70,14 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                     input.setCurrentNode(currentNodeVar);
                 }
 
-                int elementIndex = (int) (readIndexVar & NodeUtil.NODE_DATA_SIZE_MASK);
-                Object element = currentNodeVar[elementIndex];
+                int elementIndex = (int) (readIndexVar & Node.NODE_DATA_SIZE_MASK);
+                Object element = Node.getElement(currentNodeVar, elementIndex);
                 if (element == null) {
                     // another thread didn't write to the index yet
                     break;
                 }
+
+                MemoryFence.load();
 
                 // just take element without context
                 batch[batchIndex] = element;
