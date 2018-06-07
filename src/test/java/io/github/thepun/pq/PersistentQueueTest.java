@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,15 +16,19 @@ class PersistentQueueTest {
 
     @BeforeEach
     void prepareCOnfiguration() throws IOException {
+        Path temp = Files.createTempDirectory("pq");
+
         configuration = new Configuration<>();
         configuration.setPersistCallback((t, c) -> {});
-        configuration.setDataPath(Files.createTempDirectory("pq").toAbsolutePath().toString());
+        configuration.setDataPath(temp.toAbsolutePath().toString());
         configuration.setPersisterThreadFactory(Thread::new);
         configuration.setSerializers(new HashMap<>());
         configuration.setSequenceFileSize(8 + 100 * 32);
         configuration.setDataFileSize(1000);
         configuration.setHeadCount(1);
         configuration.setTailCount(1);
+
+        temp.toFile().deleteOnExit();
     }
 
     @Test
@@ -61,7 +66,7 @@ class PersistentQueueTest {
 
         PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
         PersistentQueueHead<Object> head = persistentQueue.getHead(0);
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0; i < 100000; i++) {
             // push
             tail.add(i, null);
 
@@ -76,6 +81,33 @@ class PersistentQueueTest {
     }
 
     @Test
+    void pushBatchAndPullBatchRepeatSmall() throws PersistenceException {
+        configuration.getSerializers().put(Integer.class, new IntMarshaler());
+
+        PersistentQueue<Object, Object> persistentQueue = new PersistentQueue<>(configuration);
+        persistentQueue.start();
+
+        PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
+        PersistentQueueHead<Object> head = persistentQueue.getHead(0);
+        for (int i = 1; i <4; i++) {
+            // push
+            for (int k = 1; k < 15; k++) {
+                tail.add(i * k, null);
+            }
+
+            // pull
+            Object[] batch = new Object[1];
+            for (int k = 1; k < 15;  k++) {
+                int result = head.getOrWait(batch, 0, 1);
+                assertEquals(1, result);
+                assertEquals(i * k, batch[0]);
+            }
+        }
+
+        persistentQueue.stop();
+    }
+
+    @Test
     void pushBatchAndPullBatchRepeat() throws PersistenceException {
         configuration.getSerializers().put(Integer.class, new IntMarshaler());
 
@@ -84,15 +116,19 @@ class PersistentQueueTest {
 
         PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
         PersistentQueueHead<Object> head = persistentQueue.getHead(0);
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 1; i < 100; i++) {
             // push
-            for (int k = 0; k < 100; k++) {
+            for (int k = 1; k < 10000; k++) {
+                if (i == 5 &&k == 5) {
+                    Object o = null;
+                }
+
                 tail.add(i * k, null);
             }
 
             // pull
             Object[] batch = new Object[1];
-            for (int k = 0; k < 100; k++) {
+            for (int k = 1; k < 10000; k++) {
                 int result = head.getOrWait(batch, 0, 1);
                 assertEquals(1, result);
                 assertEquals(i * k, batch[0]);
@@ -112,7 +148,7 @@ class PersistentQueueTest {
         // push
         new Thread(() -> {
             PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
-            for (int i = 0; i < 50000000; i++) {
+            for (int i = 0; i < 10000000; i++) {
                 tail.add(i, null);
             }
         }).start();
@@ -126,7 +162,7 @@ class PersistentQueueTest {
             for (int k = 0; k < result; k++, i++) {
                 assertEquals(i, batch[k]);
             }
-        } while (i < 50000000);
+        } while (i < 10000000);
 
         persistentQueue.stop();
     }

@@ -38,6 +38,8 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                     break;
                 }
 
+                MemoryFence.load();
+
                 // check we need to move to another node
                 long elementNodeIndex = readIndexVar >> Node.NODE_DATA_SHIFT;
                 if (elementNodeIndex != nodeIndexVar) {
@@ -56,12 +58,20 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
 
                     // free previous node
                     if (nodeToFree != null) {
+                        if (input.getTailCursor().getExternalFreeNode() != input.getFreeNode()) {
+                            Object o = null;
+                        }
+
                         Node.clear(nodeToFree);
                         Node.setNextFree(nodeToFree, input.getFreeNode());
                         input.setFreeNode(nodeToFree);
 
                         // ensure we expose free node only after it is prepared
                         MemoryFence.store();
+
+                        if ((Integer) nodeToFree[8] == 3) {
+                            Object o = null;
+                        }
 
                         // expose new free node
                         input.getTailCursor().setExternalFreeNode(nodeToFree);
