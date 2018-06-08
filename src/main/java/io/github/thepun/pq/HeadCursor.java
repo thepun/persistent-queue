@@ -1,31 +1,49 @@
+/**
+ * Copyright (C)2011 - Marat Gariev <thepun599@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.github.thepun.pq;
 
-import sun.misc.Contended;
+final class HeadCursor extends HeadCursorMid {
 
-@Contended
-final class HeadCursor {
+    private long p0, p1, p2, p3, p4, p5, p6, p7;
 
-    private final TailCursor tailCursor;
+    HeadCursor(SerializerCursor serializerCursor) {
+        super(serializerCursor);
+    }
+}
+
+class HeadCursorPre {
+
+    private long p0, p1, p2, p3, p4, p5;
+
+}
+
+class HeadCursorMid extends HeadCursorPre {
+
     private final SerializerCursor serializerCursor;
 
     private Data data;
     private Sequence sequence;
     private long lastSequenceId;
-
     private long cursor;
     private long nodeIndex;
     private Object[] freeNode;
     private Object[] currentNode;
-    //private Object[] nextNodeToFree;
 
-    HeadCursor(SerializerCursor serializerCursor) {
+    HeadCursorMid(SerializerCursor serializerCursor) {
         this.serializerCursor = serializerCursor;
-
-        tailCursor = serializerCursor.getTailCursor();
-    }
-
-    TailCursor getTailCursor() {
-        return tailCursor;
     }
 
     SerializerCursor getSerializerCursor() {
@@ -63,14 +81,6 @@ final class HeadCursor {
     void setCurrentNode(Object[] currentNode) {
         this.currentNode = currentNode;
     }
-
-    /*Object[] getNextNodeToFree() {
-        return nextNodeToFree;
-    }
-
-    void setNextNodeToFree(Object[] nextNodeToFree) {
-        this.nextNodeToFree = nextNodeToFree;
-    }*/
 
     Data getData() {
         return data;

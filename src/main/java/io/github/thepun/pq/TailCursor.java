@@ -1,23 +1,37 @@
+/**
+ * Copyright (C)2011 - Marat Gariev <thepun599@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.github.thepun.pq;
 
-import sun.misc.Contended;
+final class TailCursor extends TailCursorMid3 {
 
-@Contended
-final class TailCursor {
+    private long p0, p1, p2, p3, p4, p5, p6, p7;
+
+}
+
+class TailCursorPre {
+
+    private long p0, p1, p2, p3, p4, p5;
+
+}
+
+class TailCursorMid1 extends TailCursorPre {
 
     private long cursor;
     private long nodeIndex;
     private Object[] currentNode;
-    //private Object[] localFreeNode;
-
-   /* private int currentExternalFreeNodeGen;
-    private Object[] currentExternalFreeNode;
-
-    private int previousExternalFreeNodeGen;
-    private Object[] previousExternalFreeNode;*/
-
-    @Contended("external")
-    private Object[] freeNode;
 
     long getCursor() {
         return cursor;
@@ -42,46 +56,17 @@ final class TailCursor {
     void setCurrentNode(Object[] currentNode) {
         this.currentNode = currentNode;
     }
+}
 
-   /* Object[] getLocalFreeNode() {
-        return localFreeNode;
-    }
+class TailCursorMid2 extends TailCursorMid1 {
 
-    void setLocalFreeNode(Object[] localFreeNode) {
-        this.localFreeNode = localFreeNode;
-    }*/
+    private long p0, p1, p2, p3, p4, p5, p6, p7;
 
-   /* int getCurrentExternalFreeNodeGen() {
-        return currentExternalFreeNodeGen;
-    }
+}
 
-    void setCurrentExternalFreeNodeGen(int currentExternalFreeNodeGen) {
-        this.currentExternalFreeNodeGen = currentExternalFreeNodeGen;
-    }
+class TailCursorMid3 extends TailCursorMid2 {
 
-    Object[] getCurrentExternalFreeNode() {
-        return currentExternalFreeNode;
-    }
-
-    void setCurrentExternalFreeNode(Object[] currentExternalFreeNode) {
-        this.currentExternalFreeNode = currentExternalFreeNode;
-    }
-
-    int getPreviousExternalFreeNodeGen() {
-        return previousExternalFreeNodeGen;
-    }
-
-    void setPreviousExternalFreeNodeGen(int previousExternalFreeNodeGen) {
-        this.previousExternalFreeNodeGen = previousExternalFreeNodeGen;
-    }
-
-    Object[] getPreviousExternalFreeNode() {
-        return previousExternalFreeNode;
-    }
-
-    void setPreviousExternalFreeNode(Object[] previousExternalFreeNode) {
-        this.previousExternalFreeNode = previousExternalFreeNode;
-    }*/
+    private Object[] freeNode;
 
     Object[] getFreeNode() {
         return freeNode;
@@ -90,4 +75,5 @@ final class TailCursor {
     void setFreeNode(Object[] freeNode) {
         this.freeNode = freeNode;
     }
+
 }
