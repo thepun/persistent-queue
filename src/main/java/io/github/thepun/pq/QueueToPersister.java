@@ -69,13 +69,14 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
             // check if we found previous external node with the same generation
             Object[] previousExternalFreeNodeVar = tailCursor.getPreviousExternalFreeNode();
             if (localFreeNodeVar == previousExternalFreeNodeVar) {
-                int gen = Node.currentGeneration(previousExternalFreeNodeVar);
+                return getExternalFreeNode(tailCursor);
+                /*int gen = Node.currentGeneration(previousExternalFreeNodeVar);
                 if (gen == tailCursor.getPreviousExternalFreeNodeGen()) {
                     //localFreeNodeVar = null;
                     return getExternalFreeNode(tailCursor);
                 } else {
                     Object o = null;
-                }
+                }*/
             }
 
             //Node.setNextFree(localFreeNodeVar, null);
@@ -111,10 +112,10 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         MemoryFence.load();
 
         // if external free node is still not changed we assume that there are not enough nodes and we have to create new
-        int currentExternalFreeNodeGenVar = tailCursor.getCurrentExternalFreeNodeGen();
+        //int currentExternalFreeNodeGenVar = tailCursor.getCurrentExternalFreeNodeGen();
         Object[] currentExternalFreeNodeVar = tailCursor.getCurrentExternalFreeNode();
-        int gen = Node.currentGeneration(externalFreeNodeVar);
-        if (externalFreeNodeVar == currentExternalFreeNodeVar && gen == currentExternalFreeNodeGenVar) {
+        //int gen = Node.currentGeneration(externalFreeNodeVar);
+        if (externalFreeNodeVar == currentExternalFreeNodeVar/* && gen == currentExternalFreeNodeGenVar*/) {
             //tailCursor.setLocalFreeNode(null);
             return Node.createNew();
         }
@@ -124,9 +125,9 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         }
 
         // save external nodes
-        tailCursor.setPreviousExternalFreeNodeGen(currentExternalFreeNodeGenVar);
+        //tailCursor.setPreviousExternalFreeNodeGen(currentExternalFreeNodeGenVar);
         tailCursor.setPreviousExternalFreeNode(currentExternalFreeNodeVar);
-        tailCursor.setCurrentExternalFreeNodeGen(gen);
+        //tailCursor.setCurrentExternalFreeNodeGen(gen);
         tailCursor.setCurrentExternalFreeNode(externalFreeNodeVar);
 
         MemoryFence.load();
