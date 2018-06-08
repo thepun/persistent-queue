@@ -164,6 +164,8 @@ class PersistentQueueTest {
             }
         } while (i < 10000000);
 
+        System.out.println("Nodes created: " + Node.COUNTER);
+
         persistentQueue.stop();
     }
 

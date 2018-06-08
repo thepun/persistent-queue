@@ -23,21 +23,12 @@ final class Pipeline {
         writer = new DataWriter(data);
         writer.setCursor(initialScan.getDataCursor());
 
-        //Object[] previousNode = Node.createNew();
         Object[] currentNode = Node.createNew();
-        //Node.setPrev(currentNode, previousNode);
-        //Object[] localFreeNode = Node.createNew();
-        Object[] externalFreeNode = Node.createNew();
-        //Object[] previousExternalFreeNode = Node.createNew();
-        //Node.setNextFree(externalFreeNode, previousExternalFreeNode);
-        //Node.setNextFree(previousExternalFreeNode, previousExternalFreeNode);
+        Object[] freeNode = Node.createNew();
 
         tailCursor = new TailCursor();
         tailCursor.setCurrentNode(currentNode);
-        //tailCursor.setLocalFreeNode(localFreeNode);
-        tailCursor.setExternalFreeNode(externalFreeNode);
-        tailCursor.setCurrentExternalFreeNode(externalFreeNode);
-        //tailCursor.setPreviousExternalFreeNode(previousExternalFreeNode);
+        tailCursor.setFreeNode(freeNode);
 
         serializerCursor = new SerializerCursor(tailCursor);
         serializerCursor.setCurrentNode(currentNode);
@@ -46,7 +37,7 @@ final class Pipeline {
         headCursor.setData(data);
         headCursor.setSequence(sequence);
         headCursor.setCurrentNode(currentNode);
-        headCursor.setFreeNode(externalFreeNode);
+        headCursor.setFreeNode(freeNode);
 
         queueToPersister = new QueueToPersister(tailCursor);
 

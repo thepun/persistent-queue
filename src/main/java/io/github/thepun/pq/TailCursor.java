@@ -8,16 +8,16 @@ final class TailCursor {
     private long cursor;
     private long nodeIndex;
     private Object[] currentNode;
-    private Object[] localFreeNode;
+    //private Object[] localFreeNode;
 
-    private int currentExternalFreeNodeGen;
+   /* private int currentExternalFreeNodeGen;
     private Object[] currentExternalFreeNode;
 
     private int previousExternalFreeNodeGen;
-    private Object[] previousExternalFreeNode;
+    private Object[] previousExternalFreeNode;*/
 
     @Contended("external")
-    private Object[] externalFreeNode;
+    private Object[] freeNode;
 
     long getCursor() {
         return cursor;
@@ -43,15 +43,15 @@ final class TailCursor {
         this.currentNode = currentNode;
     }
 
-    Object[] getLocalFreeNode() {
+   /* Object[] getLocalFreeNode() {
         return localFreeNode;
     }
 
     void setLocalFreeNode(Object[] localFreeNode) {
         this.localFreeNode = localFreeNode;
-    }
+    }*/
 
-    int getCurrentExternalFreeNodeGen() {
+   /* int getCurrentExternalFreeNodeGen() {
         return currentExternalFreeNodeGen;
     }
 
@@ -81,13 +81,13 @@ final class TailCursor {
 
     void setPreviousExternalFreeNode(Object[] previousExternalFreeNode) {
         this.previousExternalFreeNode = previousExternalFreeNode;
+    }*/
+
+    Object[] getFreeNode() {
+        return freeNode;
     }
 
-    Object[] getExternalFreeNode() {
-        return externalFreeNode;
-    }
-
-    void setExternalFreeNode(Object[] externalFreeNode) {
-        this.externalFreeNode = externalFreeNode;
+    void setFreeNode(Object[] freeNode) {
+        this.freeNode = freeNode;
     }
 }

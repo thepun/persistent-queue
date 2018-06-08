@@ -51,35 +51,21 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
 
                     MemoryFence.load();
 
-                    // current node should be free as previous in next freeing stage
-                    // current node can be used currently so we can't clear it
-                    Object[] nodeToFree = input.getNextNodeToFree();
-                    input.setNextNodeToFree(currentNodeVar);
+                    // clear previous node and chan it with current
+                    Object[] freeNodeVar = input.getFreeNode();
+                    Node.clear(freeNodeVar);
+                    Node.setNextFree(currentNodeVar, null);
 
-                    // free previous node
-                    if (nodeToFree != null) {
-                        if (input.getTailCursor().getExternalFreeNode() != input.getFreeNode()) {
-                            Object o = null;
-                        }
+                    // ensure we expose free node only after it is prepared
+                    MemoryFence.store();
 
-                        Node.clear(nodeToFree);
-                        Node.setNextFree(nodeToFree, input.getFreeNode());
-                        input.setFreeNode(nodeToFree);
-
-                        // ensure we expose free node only after it is prepared
-                        MemoryFence.store();
-
-                        if ((Integer) nodeToFree[8] == 3) {
-                            Object o = null;
-                        }
-
-                        // expose new free node
-                        input.getTailCursor().setExternalFreeNode(nodeToFree);
-                    }
+                    // mark previous node as reusable
+                    Node.setNextFree(freeNodeVar, currentNodeVar);
 
                     // use new node as current
                     currentNodeVar = nextNode;
                     nodeIndexVar = elementNodeIndex;
+                    input.setFreeNode(currentNodeVar);
                     input.setNodeIndex(elementNodeIndex);
                     input.setCurrentNode(currentNodeVar);
                 }
