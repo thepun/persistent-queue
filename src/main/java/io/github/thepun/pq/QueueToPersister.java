@@ -18,18 +18,10 @@ final class QueueToPersister implements PersistentQueueTail<Object, Object> {
         long nodeIndexVar = tailCursorVar.getNodeIndex();
         Object[] currentNodeVar = tailCursorVar.getCurrentNode();
 
-        if (element != null && (Integer) element == 39) {
-            Object o = null;
-        }
-
         long elementNodeIndex = writerIndexVar >> Node.NODE_DATA_SHIFT;
         if (elementNodeIndex != nodeIndexVar) {
             // get new node
             Object[] newNode = getFreeNode(tailCursorVar);
-
-            if ((Integer) newNode[8] == 3) {
-                Object o = null;
-            }
 
             tailCursorVar.setNodeIndex(elementNodeIndex);
             tailCursorVar.setCurrentNode(newNode);

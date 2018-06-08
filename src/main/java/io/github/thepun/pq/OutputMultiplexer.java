@@ -55,6 +55,7 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                     Object[] freeNodeVar = input.getFreeNode();
                     Node.clear(freeNodeVar);
                     Node.setNextFree(currentNodeVar, null);
+                    input.setFreeNode(currentNodeVar);
 
                     // ensure we expose free node only after it is prepared
                     MemoryFence.store();
@@ -65,7 +66,6 @@ final class OutputMultiplexer implements PersistentQueueHead<Object> {
                     // use new node as current
                     currentNodeVar = nextNode;
                     nodeIndexVar = elementNodeIndex;
-                    input.setFreeNode(currentNodeVar);
                     input.setNodeIndex(elementNodeIndex);
                     input.setCurrentNode(currentNodeVar);
                 }

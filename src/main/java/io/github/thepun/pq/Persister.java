@@ -199,8 +199,6 @@ final class Persister implements Runnable {
     private void processPipelines() {
         Logger.info("Processing new elements with multiple I/O");
 
-        Object prevElement = null;
-
         Marshaller<Object, Object>[] marshallers = marshallersByClass;
         int serializersSize = marshallers.length;
 
@@ -294,16 +292,6 @@ final class Persister implements Runnable {
                 readIndexVar += 2;
                 MemoryFence.store(); // increment cursor only after all data is saved
                 input.setCursor(readIndexVar);
-
-                if (prevElement != null) {
-                    int prevValue = (Integer) prevElement;
-                    int curValue = (Integer) element;
-                    if (prevValue + 1 != curValue) {
-                        Object o = null;
-                    }
-                }
-
-                prevElement = element;
             }
         }
     }

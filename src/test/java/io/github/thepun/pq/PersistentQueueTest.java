@@ -89,15 +89,15 @@ class PersistentQueueTest {
 
         PersistentQueueTail<Object, Object> tail = persistentQueue.getTail(0);
         PersistentQueueHead<Object> head = persistentQueue.getHead(0);
-        for (int i = 1; i <4; i++) {
+        for (int i = 1; i < 4; i++) {
             // push
-            for (int k = 1; k < 15; k++) {
+            for (int k = 1; k < 19; k++) {
                 tail.add(i * k, null);
             }
 
             // pull
             Object[] batch = new Object[1];
-            for (int k = 1; k < 15;  k++) {
+            for (int k = 1; k < 19;  k++) {
                 int result = head.getOrWait(batch, 0, 1);
                 assertEquals(1, result);
                 assertEquals(i * k, batch[0]);
@@ -119,10 +119,6 @@ class PersistentQueueTest {
         for (int i = 1; i < 100; i++) {
             // push
             for (int k = 1; k < 10000; k++) {
-                if (i == 5 &&k == 5) {
-                    Object o = null;
-                }
-
                 tail.add(i * k, null);
             }
 
@@ -163,8 +159,6 @@ class PersistentQueueTest {
                 assertEquals(i, batch[k]);
             }
         } while (i < 10000000);
-
-        System.out.println("Nodes created: " + Node.COUNTER);
 
         persistentQueue.stop();
     }
